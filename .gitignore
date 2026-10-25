@@ -1,0 +1,15 @@
+node_modules/
+dist/
+artifacts/
+.browser-profile*/
+config.local.json
+*.log
+desktop-dist/
+release/
+release-mac/
+.cache/
+.desktop-profile*/
+desktop.oauth.local.json
+extension-key.json
+.probe-profile/
+.tmp-*/

@@ -1,0 +1,5 @@
+# 功能：Mac ZIP 交叉封裝的獨立輸出位置；用法：electron-builder --config electron-builder.mac.yml --mac zip --arm64 --x64。簽署仍需 macOS。
+extends: ./electron-builder.yml
+directories:
+  app: desktop-dist
+  output: release-mac

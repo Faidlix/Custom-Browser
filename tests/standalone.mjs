@@ -1,0 +1,62 @@
+// 功能：有畫面的隔離 Chrome 驗收獨立視窗、原生側欄、跨站、多分頁與退出；用法：node tests/standalone.mjs，CHROMIUM_PATH 指定 Chrome。
+import { chromium } from 'playwright';
+import { mkdtemp, writeFile } from 'node:fs/promises';
+import path from 'node:path';
+import assert from 'node:assert/strict';
+const root=process.cwd();
+const context=await chromium.launchPersistentContext(await mkdtemp(path.join(root,'.browser-profile-standalone-')), {headless:false,viewport:null,channel:'chromium',executablePath:process.env.CHROMIUM_PATH,args:[`--disable-extensions-except=${root}/dist`,`--load-extension=${root}/dist`]});
+const checks=[];
+async function until(fn){for(let i=0;i<80;i++){const r=await fn();if(r)return r;await new Promise(r=>setTimeout(r,100));}throw Error('等待驗證條件逾時');}
+try {
+ const worker=context.serviceWorkers()[0]||await context.waitForEvent('serviceworker');
+ const extension=worker.url().replace('background.js','');
+ const panel=await context.newPage(); await panel.goto(extension+'sidepanel.html');
+ await panel.locator('#standalone-open').waitFor();
+ const origin=await panel.evaluate(async()=> (await chrome.windows.getCurrent()).id);
+ const originTabs=await worker.evaluate(async id=>(await chrome.tabs.query({windowId:id})).map(t=>t.id),origin);
+ await panel.locator('#standalone-open').click();
+ const launch=await until(()=>context.pages().find(p=>p.url()===extension+'launch.html'));
+ const windowId=await launch.evaluate(async()=> (await chrome.windows.getCurrent()).id);
+ assert.notEqual(windowId,origin);
+ await launch.screenshot({path:'artifacts/standalone-launch.png'});
+ await launch.locator('#start').click();
+ await until(async()=> (await worker.evaluate(id=>chrome.windows.get(id),windowId)).state==='fullscreen');
+ checks.push('獨立視窗啟動流程進入真實全螢幕');
+ await until(async()=> (await worker.evaluate(()=>chrome.runtime.getContexts({contextTypes:['SIDE_PANEL']}))).length);
+ checks.push('Chrome 建立原生 SIDE_PANEL context');
+ const cdp=await context.newCDPSession(panel);
+ const own=(await cdp.send('Target.getTargetInfo')).targetInfo.targetId;
+ const target=(await cdp.send('Target.getTargets')).targetInfos.find(t=>t.url===extension+'sidepanel.html'&&t.targetId!==own);assert(target);
+ const {sessionId}=await cdp.send('Target.attachToTarget',{targetId:target.targetId,flatten:false});
+ let sequence=0;
+ const send=(method,params={})=>new Promise((resolve,reject)=>{
+  const id=++sequence;const timer=setTimeout(()=>{cdp.off('Target.receivedMessageFromTarget',listener);reject(Error('CDP timeout'));},10000);
+  const listener=e=>{if(e.sessionId!==sessionId)return;const r=JSON.parse(e.message);if(r.id!==id)return;clearTimeout(timer);cdp.off('Target.receivedMessageFromTarget',listener);r.error?reject(Error(r.error.message)):resolve(r.result);};
+  cdp.on('Target.receivedMessageFromTarget',listener);cdp.send('Target.sendMessageToTarget',{sessionId,message:JSON.stringify({id,method,params})}).catch(reject);
+ });
+ const native=async expression=>{const r=await send('Runtime.evaluate',{expression,returnByValue:true,awaitPromise:true});if(r.exceptionDetails)throw Error(JSON.stringify(r.exceptionDetails));return r.result?.value;};
+ await until(()=>native('document.querySelector("#space-title")?.textContent === "日常"'));
+ assert.equal(await native('(async()=> (await chrome.windows.getCurrent()).id)()'),windowId);checks.push('原生側欄渲染完成並綁定正確視窗');
+ const call=(type,args={})=>panel.evaluate(async({type,args,windowId})=>{const r=await chrome.runtime.sendMessage({type,windowId,...args});if(!r.ok)throw Error(r.error);return r.data;},{type,args,windowId});
+ await native('document.querySelector("#address").value="https://example.com/";document.querySelector("#address-form").requestSubmit()');
+ await until(async()=> (await call('snapshot')).activeTab?.url==='https://example.com/');
+ const site=await until(()=>context.pages().find(p=>p.url()==='https://example.com/'));
+ await site.getByText('This domain is for use in documentation examples',{exact:false}).waitFor();
+ await native('document.querySelector("#address").value="https://example.org/";document.querySelector("#address-form").requestSubmit()');
+ await until(async()=> (await call('snapshot')).activeTab?.url==='https://example.org/');
+ await site.waitForURL('https://example.org/');await site.getByText('This domain is for use in documentation examples',{exact:false}).waitFor();
+ assert.equal(await native('!!document.querySelector("#space-title")'),true);
+ checks.push('同一分頁跨網站導覽');
+ await call('navigate',{input:'https://example.net/',newTab:true});
+ const tabs=await until(async()=>{const t=await worker.evaluate(id=>chrome.tabs.query({windowId:id}),windowId);return t.length===2&&t.every(x=>x.status==='complete')?t:null;});
+ assert.equal(tabs.length,2); checks.push('新增分頁留在獨立視窗');
+ const state=await call('snapshot'); const key=state.bindings[tabs[0].id]?.key; assert(key);
+ await until(()=>native(`!!document.querySelector('[data-key="${key}"] .open-item')`));
+ await native(`document.querySelector('[data-key="${key}"] .open-item').click()`);
+ await until(async()=> (await call('snapshot')).activeTab.id===tabs[0].id);checks.push('在原生側欄點擊分頁並切換');
+ const capture=await send('Page.captureScreenshot',{format:'png'});await writeFile('artifacts/standalone-native-sidebar.png',Buffer.from(capture.data,'base64'));
+ await native('document.querySelector("#window-return").click()');await until(async()=> (await worker.evaluate(id=>chrome.windows.get(id),windowId)).state==='normal');
+ assert.deepEqual((await worker.evaluate(id=>chrome.tabs.query({windowId:id}),windowId)).map(t=>t.id),tabs.map(t=>t.id));checks.push('返回標準 Chrome 視窗保留分頁 ID 與網址');
+ assert.deepEqual(await worker.evaluate(async id=>(await chrome.tabs.query({windowId:id})).map(t=>t.id),origin),originTabs);checks.push('原視窗分頁不受影響');
+ await writeFile('artifacts/standalone-test.json',JSON.stringify({browser:context.browser()?.version(),checks},null,2));console.log({checks});
+}finally{await context.close();}

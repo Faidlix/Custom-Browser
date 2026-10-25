@@ -1,0 +1,309 @@
+/* 功能：Arc 參考桌面外框、四向停靠、收合 Hover 與頂端視窗控制。入口：桌面 index.html；佈局可選本機或 Drive 同步。 */
+body.desktop{--sidebar-width:260px;min-width:800px;overflow:hidden;background-image:linear-gradient(#11182235,#11182235),var(--space-gradient,linear-gradient(145deg,#283c52,#684c6c)),var(--space-image,none);background-size:cover;background-position:center;color:#f1f3f7}
+.desktop #shell{width:var(--sidebar-width);height:100vh;background:none;padding:13px 11px 9px;border:0;border-radius:0}
+.desktop header{height:34px;margin:0 3px 16px;-webkit-app-region:drag}.desktop button,.desktop input,.desktop select{-webkit-app-region:no-drag}.desktop .brand{font-size:13px;font-weight:650}.desktop .brand-mark{font-size:25px}.desktop .window-tools #focus-toggle{display:none}.desktop .window-tools .icon{font-size:15px;width:27px}
+.desktop .navigation{margin:0 0 7px 1px}.desktop #address-form{background:#17203045;border:1px solid #ffffff17;border-radius:11px;min-height:40px}.desktop #address{font-size:11px}.desktop #address-form button{padding:6px}.desktop .search-trigger{font-size:11px;color:#d0d8e4;margin-bottom:4px}.desktop .space-heading{margin:18px 7px 10px}.desktop .space-heading h1{font-size:13px}.desktop .section-title{font-size:9px;letter-spacing:.5px;color:#b5bdcf}.desktop .item{border-radius:9px;min-height:38px}.desktop .item.active{background:#ffffff24;box-shadow:0 2px 7px #00000010}.desktop .item .open-item{padding:9px 8px}.desktop .pinned-grid .item{background:#ffffff13;min-height:49px;border:1px solid #ffffff06}.desktop .pinned-grid .item:hover{background:#ffffff20}.desktop .favicon{background:#ffffff15;border-radius:6px}.desktop #spaces .selected{background:#ffffff24}.desktop #window-return{display:none!important}
+#desktop-titlebar{position:fixed;top:0;left:calc(var(--sidebar-width) + 8px);right:0;height:42px;display:flex;align-items:center;padding:0 10px 0 12px;gap:9px;-webkit-app-region:drag}#page-title{font-size:11px;color:#e4e7ed;max-width:60%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}#page-loading{width:7px;height:7px;background:#d9c4ff;border-radius:50%;animation:pulse 1s infinite}.window-controls{margin-left:auto;display:flex;gap:3px;-webkit-app-region:no-drag}.window-controls button{border-radius:6px;padding:5px 12px;min-width:36px;height:28px;background:transparent;font-size:15px}.window-controls button:hover{background:#ffffff18}.window-controls #window-close:hover{background:#ca4655;color:white}body.darwin .window-controls button{border-radius:50%;height:20px;width:20px;min-width:20px;padding:0;margin:0 3px;font-size:12px}body.darwin #window-close{background:#f06564}body.darwin #window-minimize{background:#f3be50}body.darwin #window-maximize{background:#62c554}
+#content-frame{position:fixed;top:42px;left:calc(var(--sidebar-width) + 8px);right:12px;bottom:12px;background:#f4f5f8;border-radius:13px;box-shadow:0 8px 30px #0b14252b;overflow:hidden}#welcome{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#44516c;text-align:center;background:radial-gradient(ellipse at 65% 30%,#e4def1,transparent 60%),#f3f4f8}#welcome .welcome-mark{font-size:70px;color:#687aa2;line-height:1}#welcome h2{font-size:28px;font-weight:500;margin:22px 0 10px;letter-spacing:1px}#welcome p{font-size:13px;color:#8b94a6;line-height:1.9}#welcome-search{margin:18px 0;background:#ffffffb0;border:1px solid #d5dbe6;color:#78849c;border-radius:12px;padding:13px 25px;min-width:260px;box-shadow:0 4px 15px #cbd0de35;text-align:left}#welcome .welcome-foot{font-size:10px;margin-top:30px;color:#9a9fb0}#page-error{position:fixed;top:8px;left:calc(var(--sidebar-width) + 180px);right:150px;font-size:10px;color:#ffdbbd;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;pointer-events:none}
+#sidebar-resize{position:fixed;left:calc(var(--sidebar-width) - 2px);width:9px;top:45px;bottom:14px;cursor:col-resize;z-index:3;-webkit-app-region:no-drag}#sidebar-resize:hover{background:#ffffff14;border-radius:4px}.desktop dialog{max-width:480px;width:calc(100% - 60px);padding:24px;background:#293342ee;backdrop-filter:blur(25px);border:1px solid #ffffff23;box-shadow:0 25px 100px #0006}.desktop dialog::backdrop{background:#10192699}.desktop .dialog-head h2{font-size:19px}.desktop #toast{left:calc(var(--sidebar-width) + 30px);right:40px;bottom:30px;max-width:600px;background:#233046ed}.desktop #settings-dialog h3{color:#e0def0}.desktop #frame-status{line-height:1.8}.desktop .launch-page{background:none}@keyframes pulse{50%{opacity:.25}}
+
+body.desktop{--sidebar-size:260px;--sidebar-visible:260px;--sidebar-width:var(--sidebar-visible)}
+.desktop #shell{position:fixed;z-index:8;transition:transform .18s ease,width .18s ease,height .18s ease;box-shadow:0 12px 36px #080d1870;overflow:hidden}
+.desktop header{-webkit-app-region:no-drag}.desktop #sidebar-drag-handle{flex:1;min-width:22px;min-height:25px;display:grid;place-items:center;color:#ffffff55;cursor:grab;touch-action:none}.desktop #sidebar-drag-handle:active{cursor:grabbing}.desktop #sidebar-toggle{font-size:12px;padding:5px 7px}
+.dock-left #shell{left:0;top:0;width:var(--sidebar-size);height:100vh}.dock-right #shell{right:0;top:0;width:var(--sidebar-size);height:100vh}.dock-top #shell{left:0;top:0;width:100vw;height:var(--sidebar-size)}.dock-bottom #shell{left:0;bottom:0;width:100vw;height:var(--sidebar-size)}
+.sidebar-collapsed.dock-left:not(.sidebar-expanded) #shell{transform:translateX(calc(34px - var(--sidebar-size)))}.sidebar-collapsed.dock-right:not(.sidebar-expanded) #shell{transform:translateX(calc(var(--sidebar-size) - 34px))}.sidebar-collapsed.dock-top:not(.sidebar-expanded) #shell{transform:translateY(calc(34px - var(--sidebar-size)))}.sidebar-collapsed.dock-bottom:not(.sidebar-expanded) #shell{transform:translateY(calc(var(--sidebar-size) - 34px))}
+#sidebar-hover-zone{position:fixed;z-index:9;background:transparent}.dock-left #sidebar-hover-zone{left:0;top:0;width:12px;height:100vh}.dock-right #sidebar-hover-zone{right:0;top:0;width:12px;height:100vh}.dock-top #sidebar-hover-zone{left:0;top:0;width:100vw;height:12px}.dock-bottom #sidebar-hover-zone{left:0;bottom:0;width:100vw;height:12px}body:not(.sidebar-collapsed) #sidebar-hover-zone,body.sidebar-expanded #sidebar-hover-zone{pointer-events:none}
+.dock-left #desktop-titlebar{left:calc(var(--sidebar-visible) + 8px);right:0}.dock-right #desktop-titlebar{left:0;right:calc(var(--sidebar-visible) + 8px)}.dock-top #desktop-titlebar,.dock-bottom #desktop-titlebar{left:0;right:0}
+.dock-left #content-frame{left:calc(var(--sidebar-visible) + 8px);right:12px}.dock-right #content-frame{left:12px;right:calc(var(--sidebar-visible) + 8px)}.dock-top #content-frame{left:12px;right:12px;top:calc(var(--sidebar-visible) + 8px)}.dock-bottom #content-frame{left:12px;right:12px;bottom:calc(var(--sidebar-visible) + 8px)}
+.dock-right #page-error{left:180px;right:calc(var(--sidebar-visible) + 150px)}.dock-top #page-error,.dock-bottom #page-error{left:190px;right:150px}
+.dock-left #sidebar-resize{left:calc(var(--sidebar-visible) - 4px);right:auto;top:45px;bottom:14px;width:9px;height:auto;cursor:col-resize}.dock-right #sidebar-resize{right:calc(var(--sidebar-visible) - 4px);left:auto;top:45px;bottom:14px;width:9px;height:auto;cursor:col-resize}.dock-top #sidebar-resize{top:calc(var(--sidebar-visible) - 4px);bottom:auto;left:14px;right:14px;width:auto;height:9px;cursor:row-resize}.dock-bottom #sidebar-resize{bottom:calc(var(--sidebar-visible) - 4px);top:auto;left:14px;right:14px;width:auto;height:9px;cursor:row-resize}.sidebar-collapsed:not(.sidebar-expanded) #sidebar-resize{display:none}
+.dock-top #shell,.dock-bottom #shell{display:flex;flex-direction:row;align-items:stretch;gap:8px;padding:10px}.dock-top #shell header,.dock-bottom #shell header{width:150px;height:auto;flex-shrink:0;align-items:flex-start;flex-wrap:wrap;margin:0}.dock-top #address-section,.dock-bottom #address-section{width:230px;flex-shrink:0;overflow:auto}.dock-top .search-trigger,.dock-bottom .search-trigger{width:150px;align-self:center}.dock-top .space-heading,.dock-bottom .space-heading{width:145px;flex-shrink:0;align-self:center;margin:0}.dock-top #view-tabs,.dock-bottom #view-tabs{width:90px;flex-direction:column;flex-shrink:0;margin:0}.dock-top #items,.dock-bottom #items{min-width:260px;padding:0 8px}.dock-top .new-tab,.dock-bottom .new-tab{width:110px;align-self:center;flex-shrink:0}.dock-top footer,.dock-bottom footer{width:190px;flex-shrink:0;border:0;padding:0;overflow:auto}.dock-top #spaces,.dock-bottom #spaces{flex-wrap:wrap}.dock-top #conflict-banner,.dock-bottom #conflict-banner{position:absolute;right:205px;bottom:8px;width:230px}
+#desktop-titlebar{z-index:20}.window-controls{opacity:0;pointer-events:none;transform:translateY(-5px);transition:opacity .14s ease,transform .14s ease}#desktop-titlebar:hover .window-controls,#desktop-titlebar:focus-within .window-controls{opacity:1;pointer-events:auto;transform:none}
+.dock-top #desktop-titlebar{height:8px;padding-top:0;overflow:visible}.dock-top #desktop-titlebar #page-title,.dock-top #desktop-titlebar #page-loading{opacity:0}.dock-top #desktop-titlebar:hover,.dock-top #desktop-titlebar:focus-within{height:42px;background:#151c29dd;backdrop-filter:blur(18px)}
+#dock-preview{position:fixed;inset:0;z-index:1002;pointer-events:none;background:#0b102044}#dock-preview span{position:absolute;display:grid;place-items:center;color:#fff;background:#7184a477;border:2px solid #ffffff55;border-radius:14px;transition:.12s}#dock-preview span.selected{background:#9d7fd0aa;border-color:#fff;box-shadow:0 0 30px #bda4ef88}#dock-preview [data-dock=top]{left:25%;right:25%;top:16px;height:76px}#dock-preview [data-dock=bottom]{left:25%;right:25%;bottom:16px;height:76px}#dock-preview [data-dock=left]{left:16px;top:25%;bottom:25%;width:76px}#dock-preview [data-dock=right]{right:16px;top:25%;bottom:25%;width:76px}
+.docking #desktop-titlebar{-webkit-app-region:no-drag;pointer-events:none}
+.dock-right .desktop #toast,.dock-right #toast{left:40px;right:calc(var(--sidebar-visible) + 30px)}.dock-top #toast{left:40px;right:40px;bottom:30px}.dock-bottom #toast{left:40px;right:40px;bottom:calc(var(--sidebar-visible) + 30px)}
+/* 上下停靠採 Chrome 類型的雙列橫向分頁列。 */
+.dock-top #shell,.dock-bottom #shell{display:grid;grid-template-columns:150px minmax(260px,1fr) 170px 220px;grid-template-rows:minmax(48px,1fr) 44px;gap:5px 8px;padding:7px 10px}
+.dock-top #shell header,.dock-bottom #shell header{grid-column:1;grid-row:2;width:auto;height:44px;align-items:center;flex-wrap:nowrap;margin:0}
+.dock-top #address-section,.dock-bottom #address-section{grid-column:2;grid-row:2;width:auto;display:flex;align-items:center;gap:5px;overflow:visible}.dock-top .navigation,.dock-bottom .navigation{flex-shrink:0;margin:0}.dock-top #address-form,.dock-bottom #address-form{flex:1;margin:0;min-height:34px}
+.dock-top .search-trigger,.dock-bottom .search-trigger{display:none}.dock-top .space-heading,.dock-bottom .space-heading{grid-column:3;grid-row:2;width:auto;align-self:center;margin:0 4px}.dock-top footer,.dock-bottom footer{grid-column:4;grid-row:2;width:auto;display:flex;align-items:center;gap:7px;border:0;padding:0;overflow:hidden}.dock-top #spaces,.dock-bottom #spaces{flex:1;flex-wrap:nowrap}.dock-top .sync-line,.dock-bottom .sync-line{margin:0;flex-shrink:0}.dock-top #sync-status,.dock-bottom #sync-status{display:none}
+.dock-top #items,.dock-bottom #items{grid-column:1/4;grid-row:1;display:flex;align-items:stretch;gap:6px;min-width:0;padding:0;overflow-x:auto;overflow-y:hidden}.dock-top .new-tab,.dock-bottom .new-tab{grid-column:4;grid-row:1;width:auto;align-self:stretch;margin:0;display:grid;place-items:center;border:1px solid #ffffff0f;border-radius:9px}
+.dock-top .pinned-zone,.dock-bottom .pinned-zone{display:flex;align-items:center;flex-shrink:0;margin:0;padding:2px 7px;border-radius:8px}.dock-top .pinned-zone .section-title,.dock-bottom .pinned-zone .section-title{writing-mode:vertical-rl;margin:0 6px 0 0;font-size:8px}.dock-top .pinned-grid,.dock-bottom .pinned-grid{display:flex;grid-template-columns:none;gap:4px}.dock-top .pinned-empty,.dock-bottom .pinned-empty{width:150px;padding:8px}
+.dock-top #items>.section-title,.dock-bottom #items>.section-title{display:flex;align-items:center;flex-shrink:0;width:70px;margin:0;padding:5px;font-size:8px;line-height:1.4}.dock-top #items>.item,.dock-bottom #items>.item,.dock-top .folder-content>.item,.dock-bottom .folder-content>.item,.dock-top .pinned-grid>.item,.dock-bottom .pinned-grid>.item{width:175px;min-width:175px;height:46px;margin:0;align-self:center}.dock-top #items details,.dock-bottom #items details{display:flex;align-items:center;flex-shrink:0;margin:0}.dock-top #items summary,.dock-bottom #items summary{width:100px;flex-shrink:0}.dock-top .folder-content,.dock-bottom .folder-content{display:flex;align-items:center;gap:4px;padding:0;margin:0;border:0}
+.dock-top #conflict-banner,.dock-bottom #conflict-banner{position:absolute;right:230px;bottom:5px;width:210px}
+.dock-top #items.few-tabs .item,.dock-bottom #items.few-tabs .item{width:210px;min-width:150px}.dock-top #items.medium-tabs,.dock-bottom #items.medium-tabs{gap:3px}.dock-top #items.medium-tabs .item,.dock-bottom #items.medium-tabs .item{width:115px;min-width:90px}.dock-top #items.medium-tabs .item-state,.dock-bottom #items.medium-tabs .item-state{display:none}
+.dock-top #items.many-tabs,.dock-bottom #items.many-tabs{gap:2px}.dock-top #items.many-tabs .pinned-zone,.dock-bottom #items.many-tabs .pinned-zone{padding:0 4px}.dock-top #items.many-tabs .pinned-zone .section-title,.dock-bottom #items.many-tabs .pinned-zone .section-title,.dock-top #items.many-tabs>.section-title,.dock-bottom #items.many-tabs>.section-title{display:none}.dock-top #items.many-tabs .item,.dock-bottom #items.many-tabs .item{width:40px;min-width:40px;height:40px;border-radius:9px}.dock-top #items.many-tabs .open-item,.dock-bottom #items.many-tabs .open-item{justify-content:center;padding:7px}.dock-top #items.many-tabs .item-text,.dock-bottom #items.many-tabs .item-text,.dock-top #items.many-tabs .close-tab,.dock-bottom #items.many-tabs .close-tab,.dock-top #items.many-tabs .more,.dock-bottom #items.many-tabs .more{display:none}.dock-top #items.many-tabs .favicon,.dock-bottom #items.many-tabs .favicon{width:24px;height:24px;background:transparent}.dock-top #items.many-tabs .item.active,.dock-bottom #items.many-tabs .item.active{background:#ffffff28;box-shadow:inset 0 -2px #b8d0ff}
+
+/* 0.5：介面文字不反白；頂端資訊只在 Hover 浮出；空白區拖曳只顯示合成預覽。 */
+body.desktop,body.desktop button,body.desktop summary,body.desktop label{-webkit-user-select:none;user-select:none}body.desktop input,body.desktop textarea,body.desktop [contenteditable=true]{-webkit-user-select:text;user-select:text}
+#desktop-titlebar{height:8px;padding:0 10px;background:transparent;overflow:visible;transition:height .14s ease,background .14s ease,box-shadow .14s ease;z-index:20}#desktop-titlebar #page-title,#desktop-titlebar #page-loading,#desktop-titlebar .window-controls{opacity:0;pointer-events:none;transform:translateY(-6px);transition:opacity .13s ease,transform .13s ease}body.titlebar-expanded #desktop-titlebar{height:42px;background:#151c29e8;box-shadow:0 8px 25px #0005;backdrop-filter:blur(18px)}body.titlebar-expanded #desktop-titlebar #page-title,body.titlebar-expanded #desktop-titlebar #page-loading,body.titlebar-expanded #desktop-titlebar .window-controls{opacity:1;pointer-events:auto;transform:none}
+#content-frame{top:12px}.dock-left #content-frame,.dock-right #content-frame,.dock-bottom #content-frame{top:12px}.titlebar-expanded.dock-left #content-frame,.titlebar-expanded.dock-right #content-frame,.titlebar-expanded.dock-bottom #content-frame{top:42px}.dock-top #content-frame,.titlebar-expanded.dock-top #content-frame{top:calc(var(--sidebar-visible) + 8px)}
+#items{touch-action:pan-x pan-y}.dock-left #items,.dock-right #items{display:block;padding-bottom:84px}.dock-top #items,.dock-bottom #items{flex-direction:row;padding-right:96px}.docking body{cursor:grabbing}.docking #shell{transition:none}
+#sidebar-float-frame{position:fixed;z-index:1004;pointer-events:none;border:2px solid #ffffffb8;border-radius:14px;background:#dce6ff08;box-shadow:0 18px 55px #05091480,0 0 0 1px #8ba5d34d inset;transform:translate3d(0,-4px,0) scale(.99);will-change:left,top,width,height,transform;transition:left .12s ease,top .12s ease,width .12s ease,height .12s ease,opacity .12s ease}
+#dock-preview{contain:strict;background:#0b102012;will-change:opacity}#dock-preview span{opacity:0;background:#7184a42b;border-color:#ffffff42;transition:opacity .12s ease,background .12s ease,box-shadow .12s ease}#dock-preview span.pending{opacity:.42}#dock-preview span.selected{opacity:1;background:#9d7fd078;border-color:#ffffffd9;box-shadow:0 0 30px #bda4ef65}#dock-preview [data-dock=top]{left:24%;right:24%;top:8px;height:44px}#dock-preview [data-dock=bottom]{left:24%;right:24%;bottom:8px;height:44px}#dock-preview [data-dock=left]{left:8px;top:30%;bottom:30%;width:44px}#dock-preview [data-dock=right]{right:8px;top:30%;bottom:30%;width:44px}
+
+/* 0.6：固定三圓點頂列、四向一致介面、全長吸附預覽與原生視窗拖曳外框。 */
+body.desktop{--frame-gap:8px;--titlebar-height:30px}
+.desktop #shell{box-shadow:none;transition:transform .18s ease}
+.desktop #shell button,.desktop #shell input,.desktop #shell select{box-shadow:none}
+.desktop #shell button{border:0;background:transparent;outline:0}
+.desktop #shell button:hover{background:#ffffff0c}
+.desktop #shell button:focus-visible{outline:1px solid #ffffff4a;outline-offset:1px}
+.desktop header{margin-bottom:8px}
+.desktop .window-tools .icon,.desktop #sidebar-toggle{width:28px;height:28px;padding:3px;border-radius:7px}
+.desktop .navigation button{width:28px;height:28px;padding:2px;border-radius:7px}
+.desktop #address-form{min-height:38px;border:0;background:#10182755;box-shadow:inset 0 0 0 1px #ffffff0d}
+.desktop #address-form:focus-within{box-shadow:inset 0 0 0 1px #ffffff2c}
+.desktop .search-trigger{border:0;margin-bottom:2px}
+.desktop .space-heading{margin:15px 7px 8px}
+.desktop .color-settings{border:0;box-shadow:inset 0 0 0 1px #ffffff2b,0 2px 8px #0003}
+.desktop .pinned-zone{min-height:8px;margin:0 0 5px;padding:0;border:0;background:transparent}
+.desktop .pinned-grid{min-height:8px}
+.desktop .pinned-empty,.desktop .section-title,.desktop .item-state,.desktop .empty,.desktop .folder-content>.hint{display:none!important}
+.desktop .item,.desktop .pinned-grid .item{border:0;background:transparent}
+.desktop .pinned-grid .item{background:#ffffff0a}
+.desktop .item.active{background:#ffffff18;box-shadow:inset 0 0 0 1px #ffffff08}
+.desktop .new-tab{border:0;background:transparent;border-radius:8px}
+.desktop footer{border:0}
+.desktop #spaces button{border:0;border-radius:8px;background:transparent}
+.desktop #spaces .selected{background:#ffffff15;box-shadow:none}
+
+#desktop-titlebar{top:0;height:var(--titlebar-height)!important;padding:0 12px;background:transparent!important;box-shadow:none!important;backdrop-filter:none!important;overflow:visible;z-index:30;-webkit-app-region:drag;pointer-events:auto}
+#desktop-titlebar #page-title,#desktop-titlebar #page-loading{display:none!important}
+#desktop-titlebar .window-controls{margin-left:auto;display:flex;align-items:center;gap:8px;opacity:1!important;pointer-events:auto!important;transform:none!important;-webkit-app-region:no-drag}
+#desktop-titlebar .window-controls button{position:relative;width:11px;min-width:11px;height:11px;padding:0;border:0;border-radius:50%;font-size:0;box-shadow:0 0 0 1px #00000024 inset;transition:transform .12s ease,filter .12s ease}
+#desktop-titlebar .window-controls button:hover{transform:scale(1.18);filter:brightness(1.12)}
+#window-minimize{background:#e8b84c!important}#window-maximize{background:#59bd6a!important}#window-close{background:#df6269!important}
+body.darwin #desktop-titlebar .window-controls button{width:11px;min-width:11px;height:11px;margin:0;padding:0}
+
+#content-frame{top:var(--titlebar-height);left:var(--frame-gap);right:var(--frame-gap);bottom:var(--frame-gap);border:0;border-radius:15px;background:transparent;box-shadow:0 8px 28px #08101f4d;overflow:hidden}
+#content-frame #welcome{border-radius:15px}
+.dock-left #content-frame{left:calc(var(--sidebar-visible) + var(--frame-gap));right:var(--frame-gap);top:var(--titlebar-height)}
+.dock-right #content-frame{left:var(--frame-gap);right:calc(var(--sidebar-visible) + var(--frame-gap));top:var(--titlebar-height)}
+.dock-top #content-frame,.titlebar-expanded.dock-top #content-frame{left:var(--frame-gap);right:var(--frame-gap);top:calc(var(--sidebar-visible) + var(--frame-gap));bottom:var(--frame-gap)}
+.dock-bottom #content-frame,.titlebar-expanded.dock-bottom #content-frame{left:var(--frame-gap);right:var(--frame-gap);top:var(--titlebar-height);bottom:calc(var(--sidebar-visible) + var(--frame-gap))}
+.titlebar-expanded.dock-left #content-frame,.titlebar-expanded.dock-right #content-frame{top:var(--titlebar-height)}
+.dock-left #desktop-titlebar{left:calc(var(--sidebar-visible) + var(--frame-gap));right:var(--frame-gap)}
+.dock-right #desktop-titlebar{left:var(--frame-gap);right:calc(var(--sidebar-visible) + var(--frame-gap))}
+.dock-bottom #desktop-titlebar{left:var(--frame-gap);right:var(--frame-gap)}
+.dock-top #desktop-titlebar{left:var(--frame-gap);right:var(--frame-gap)}
+
+#window-drag-frame{position:fixed;inset:0;z-index:19;pointer-events:none}
+#window-drag-frame i{position:fixed;display:block;pointer-events:auto;-webkit-app-region:drag;background:transparent}
+#window-drag-frame [data-edge=top]{top:0;height:var(--titlebar-height)}
+#window-drag-frame [data-edge=bottom]{bottom:0;height:var(--frame-gap)}
+#window-drag-frame [data-edge=left]{width:var(--frame-gap)}
+#window-drag-frame [data-edge=right]{width:var(--frame-gap)}
+.dock-left #window-drag-frame [data-edge=top],.dock-left #window-drag-frame [data-edge=bottom]{left:calc(var(--sidebar-visible) + var(--frame-gap));right:var(--frame-gap)}
+.dock-left #window-drag-frame [data-edge=left]{left:var(--sidebar-visible);top:var(--titlebar-height);bottom:var(--frame-gap)}
+.dock-left #window-drag-frame [data-edge=right]{right:0;top:var(--titlebar-height);bottom:0}
+.dock-right #window-drag-frame [data-edge=top],.dock-right #window-drag-frame [data-edge=bottom]{left:var(--frame-gap);right:calc(var(--sidebar-visible) + var(--frame-gap))}
+.dock-right #window-drag-frame [data-edge=left]{left:0;top:var(--titlebar-height);bottom:0}
+.dock-right #window-drag-frame [data-edge=right]{right:var(--sidebar-visible);top:var(--titlebar-height);bottom:var(--frame-gap)}
+.dock-top #window-drag-frame [data-edge=top]{left:0;right:0;top:0;height:var(--titlebar-height)}
+.dock-top #window-drag-frame [data-edge=bottom]{left:var(--frame-gap);right:var(--frame-gap)}
+.dock-top #window-drag-frame [data-edge=left]{left:0;top:calc(var(--sidebar-visible) + var(--frame-gap));bottom:0}
+.dock-top #window-drag-frame [data-edge=right]{right:0;top:calc(var(--sidebar-visible) + var(--frame-gap));bottom:0}
+.dock-bottom #window-drag-frame [data-edge=top],.dock-bottom #window-drag-frame [data-edge=bottom]{left:var(--frame-gap);right:var(--frame-gap)}
+.dock-bottom #window-drag-frame [data-edge=left]{left:0;top:var(--titlebar-height);bottom:calc(var(--sidebar-visible) + var(--frame-gap))}
+.dock-bottom #window-drag-frame [data-edge=right]{right:0;top:var(--titlebar-height);bottom:calc(var(--sidebar-visible) + var(--frame-gap))}
+.dock-bottom #window-drag-frame [data-edge=bottom]{bottom:var(--sidebar-visible)}
+
+#dock-preview{background:#0b102010}
+#dock-preview span{border:0!important;border-radius:0!important;color:transparent!important;box-shadow:none!important}
+#dock-preview [data-dock=top]{left:0;right:0;top:0;height:var(--sidebar-size)}
+#dock-preview [data-dock=bottom]{left:0;right:0;bottom:0;height:var(--sidebar-size)}
+#dock-preview [data-dock=left]{left:0;top:0;bottom:0;width:var(--sidebar-size)}
+#dock-preview [data-dock=right]{right:0;top:0;bottom:0;width:var(--sidebar-size)}
+#dock-preview span.pending{opacity:.16}#dock-preview span.selected{opacity:.72;background:#9d7fd055!important}
+
+.dock-top #shell,.dock-bottom #shell{grid-template-columns:132px minmax(250px,1fr) 150px minmax(150px,210px);grid-template-rows:minmax(38px,1fr) 40px;gap:4px 7px;padding:30px 8px 6px}
+.dock-top #shell{padding-top:30px}
+.dock-bottom #shell{padding-top:7px}
+.dock-top #shell header,.dock-bottom #shell header{height:40px;margin:0}
+.dock-top #address-section,.dock-bottom #address-section{gap:4px}
+.dock-top #address-form,.dock-bottom #address-form{min-height:34px}
+.dock-top #items,.dock-bottom #items{gap:4px;padding:0 74px 0 0}
+.dock-top .pinned-zone,.dock-bottom .pinned-zone{padding:0;min-height:0}
+.dock-top .pinned-empty,.dock-bottom .pinned-empty{display:none!important}
+.dock-top .new-tab,.dock-bottom .new-tab{border:0;border-radius:8px;background:#ffffff08}
+.dock-top footer,.dock-bottom footer{gap:5px}
+
+/* 四向共用結構：尺寸包含 padding，避免側欄侵入網頁與控制元件互相覆蓋。 */
+body.desktop,body.desktop *,body.desktop *::before,body.desktop *::after{box-sizing:border-box}
+body.desktop{margin:0}
+.dock-left #shell,.dock-right #shell{display:flex;flex-direction:column}
+.desktop header{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:0 0 34px;min-width:0}
+.desktop .brand{display:flex;align-items:center;gap:7px;min-width:0;white-space:nowrap}
+.desktop .window-tools{display:flex;align-items:center;gap:2px;margin-left:auto}
+.desktop #address-section{display:block;flex:0 0 auto;min-width:0}
+.desktop .navigation{display:flex;align-items:center;gap:2px}
+.desktop #address-form{display:flex;align-items:center;width:100%;min-width:0;overflow:hidden}
+.desktop #address{flex:1;min-width:0;border:0;background:transparent;outline:0}
+.desktop .search-trigger{display:flex;align-items:center;justify-content:space-between;width:100%}
+.desktop .space-heading{display:flex;align-items:center;justify-content:space-between;gap:8px;flex:0 0 auto;min-width:0}
+.desktop .space-heading>div,.desktop .space-actions{display:flex;align-items:center;gap:6px;min-width:0}
+.desktop .space-heading h1{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dock-left #items,.dock-right #items{flex:1 1 auto;min-height:0;overflow:auto}
+.desktop .pinned-grid{display:grid}
+.desktop .item{display:flex;align-items:center;width:100%;min-width:0;overflow:hidden}
+.desktop .item .open-item{display:flex;align-items:center;gap:8px;flex:1;min-width:0;text-align:left}
+.desktop .favicon{display:grid;place-items:center;flex:0 0 21px}
+.desktop .item-text{display:flex;flex-direction:column;min-width:0;overflow:hidden}
+.desktop .item-title{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.desktop details{display:block;min-width:0}
+.desktop summary{display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0}
+.desktop .folder-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.desktop .new-tab{display:flex;align-items:center;flex:0 0 auto}
+.desktop footer{display:block;flex:0 0 auto;min-width:0}
+.desktop #spaces{display:flex;align-items:center;gap:3px;min-width:0;overflow-x:auto;overflow-y:hidden}
+.desktop #spaces button{display:flex;align-items:center;gap:5px;min-width:0;white-space:nowrap}
+.desktop #spaces .space-name{overflow:hidden;text-overflow:ellipsis}
+.desktop .sync-line{display:flex;align-items:center;gap:3px}
+.desktop button{font:inherit;color:inherit;cursor:pointer}
+.desktop input,.desktop select{font:inherit;color:inherit}
+
+/* 0.7：四向尺寸調整、整合網址搜尋、圓角矩形視窗控制與重新設計的設定視窗。 */
+.desktop .search-trigger{display:none!important}
+.desktop header{justify-content:flex-start}
+.desktop header>.navigation{margin:0;order:0}
+.desktop header>.window-tools{order:1;margin-left:auto}
+.desktop header>#sidebar-toggle{order:2;margin-left:2px}
+.dock-right .desktop header>#sidebar-toggle,.dock-right header>#sidebar-toggle{order:-1;margin-left:0;margin-right:2px}
+.dock-top #sidebar-toggle,.dock-bottom #sidebar-toggle{position:absolute;left:50%;top:calc(var(--sidebar-size) - 34px);transform:translateX(-50%);z-index:12}
+.dock-bottom #sidebar-toggle{top:8px}
+
+#desktop-titlebar .window-controls{gap:5px}
+#desktop-titlebar .window-controls button,body.darwin #desktop-titlebar .window-controls button{display:grid;place-items:center;width:30px;min-width:30px;height:20px;margin:0;padding:0;border:0;border-radius:7px;background:#ffffff0d!important;color:#dfe4ec;font-size:13px;line-height:1;box-shadow:inset 0 0 0 1px #ffffff12;transform:none}
+#desktop-titlebar .window-controls button:hover{background:#ffffff1b!important;filter:none;transform:none}
+#desktop-titlebar .window-controls #window-close:hover{background:#c84c59!important;color:#fff}
+.controls-left #desktop-titlebar .window-controls{margin-left:0;margin-right:auto}.controls-right #desktop-titlebar .window-controls{margin-left:auto;margin-right:0}
+#window-controls-menu{position:fixed;z-index:1100;width:112px;padding:5px;border:1px solid #ffffff18;border-radius:10px;background:#202938f4;box-shadow:0 14px 40px #0008;-webkit-app-region:no-drag}
+#window-controls-menu button{display:block;width:100%;padding:8px 10px;border:0;border-radius:7px;background:transparent;color:#e6e9ef;text-align:left}
+#window-controls-menu button:hover{background:#ffffff12}
+
+#sidebar-resize{z-index:26;background:transparent!important;border-radius:0!important;-webkit-app-region:no-drag}
+.dock-left #sidebar-resize{left:var(--sidebar-visible);right:auto;top:var(--titlebar-height);bottom:var(--frame-gap);width:var(--frame-gap);height:auto;cursor:col-resize}
+.dock-right #sidebar-resize{right:var(--sidebar-visible);left:auto;top:var(--titlebar-height);bottom:var(--frame-gap);width:var(--frame-gap);height:auto;cursor:col-resize}
+.dock-top #sidebar-resize{top:var(--sidebar-visible);bottom:auto;left:var(--frame-gap);right:var(--frame-gap);width:auto;height:var(--frame-gap);cursor:row-resize}
+.dock-bottom #sidebar-resize{bottom:var(--sidebar-visible);top:auto;left:var(--frame-gap);right:var(--frame-gap);width:auto;height:var(--frame-gap);cursor:row-resize}
+#sidebar-resize:hover{background:#ffffff18!important}
+
+.dock-top #shell,.dock-bottom #shell{grid-template-columns:minmax(300px,430px) 150px minmax(180px,1fr);grid-template-rows:minmax(38px,1fr) 40px}
+.dock-top #shell header,.dock-bottom #shell header{grid-column:3;grid-row:2;justify-self:end;width:auto;min-width:70px}
+.dock-top #address-section,.dock-bottom #address-section{grid-column:1;grid-row:2;display:flex;align-items:center;gap:5px;width:min(430px,100%);overflow:visible}
+.dock-top #address-section>.navigation,.dock-bottom #address-section>.navigation{display:flex;flex:0 0 auto;margin:0}
+.dock-top #address-form,.dock-bottom #address-form{flex:1 1 250px;max-width:330px}
+.dock-top .space-heading,.dock-bottom .space-heading{grid-column:2;grid-row:2}
+.dock-top footer,.dock-bottom footer{grid-column:3;grid-row:2;padding-right:78px}
+.dock-top #items,.dock-bottom #items{grid-column:1/4;grid-row:1}
+.dock-top .new-tab,.dock-bottom .new-tab{position:absolute;right:8px;top:32px;width:76px;height:36px}
+.dock-bottom .new-tab{top:8px}
+
+#address-section{position:relative}
+#address-suggestions{position:absolute;z-index:80;left:0;right:0;top:calc(100% + 5px);padding:5px;border:1px solid #ffffff16;border-radius:11px;background:#202938f6;box-shadow:0 18px 55px #0008;backdrop-filter:blur(20px)}
+#address-suggestions button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;padding:8px 9px;border-radius:7px;text-align:left}
+#address-suggestions small{max-width:58%;overflow:hidden;color:#aeb8c8;text-overflow:ellipsis;white-space:nowrap}
+
+.desktop .quick-dialog{width:min(440px,calc(100% - 32px));max-width:440px;padding:0!important}
+.desktop .quick-entry{width:100%;min-height:54px;padding:5px 6px;border:1px solid #ffffff1d;border-radius:13px;outline:0!important}
+.desktop .quick-entry:focus-within{border-color:#d2b8f0aa;box-shadow:0 0 0 2px #bf9de538,0 18px 55px #0008}
+.desktop .quick-entry input{flex:1 1 auto;width:auto;min-width:0;height:44px;padding:9px 12px}
+.desktop .quick-entry button{flex:0 0 38px;margin-left:auto;border:0!important;box-shadow:none!important}
+
+.desktop #settings-dialog{width:min(760px,calc(100% - 36px));max-width:760px;max-height:min(82vh,760px);padding:22px 24px;border:1px solid #ffffff18;border-radius:18px;background:#202938f7;box-shadow:0 26px 90px #0009;overflow:auto}
+.desktop #settings-dialog .dialog-head{position:sticky;top:-22px;z-index:2;display:flex;align-items:center;justify-content:space-between;margin:-22px -24px 18px;padding:18px 24px 12px;background:#202938f7;backdrop-filter:blur(18px)}
+.desktop #settings-dialog .dialog-head button{width:32px;height:32px;padding:0;border:0;border-radius:9px;background:#ffffff0c}
+.desktop #settings-dialog h2{margin:0;font-size:19px}.desktop #settings-dialog h3{margin:22px 0 10px;padding-top:4px;font-size:13px;color:#dfe5ee;border-top:1px solid #ffffff0d}
+.desktop #appearance-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px;padding:14px;border-radius:13px;background:#ffffff06}
+.desktop #appearance-form>label:first-child,.desktop #appearance-form>label:nth-of-type(4),.desktop #appearance-form>label:nth-of-type(5){grid-column:1/-1}
+.desktop #appearance-form label{display:grid;gap:6px;color:#bfc8d5;font-size:11px}.desktop #appearance-form input:not([type=color]):not([type=range]){width:100%;padding:9px 10px;border:1px solid #ffffff12;border-radius:8px;background:#11192788}
+.desktop #appearance-form input[type=color]{width:100%;height:38px;border:0;border-radius:8px;background:transparent}.desktop #appearance-form input[type=range]{width:100%}
+.desktop #appearance-form button{justify-self:start;padding:8px 11px;border:0;border-radius:8px;background:#ffffff0c}.desktop #appearance-form .primary{grid-column:1/-1;justify-self:end;background:#d6ddea;color:#1d2734}
+.desktop #settings-dialog>.check{display:flex;align-items:center;gap:8px;margin:8px 0}.desktop #settings-dialog>.form-row{display:flex;flex-wrap:wrap;gap:8px}.desktop #settings-dialog>button{margin:3px 4px 3px 0;padding:8px 10px;border:0;border-radius:8px;background:#ffffff0c}
+.confirm-dialog{width:min(390px,calc(100% - 30px));padding:20px;border:1px solid #ffffff1b;border-radius:15px;background:#202938f8;color:#eef1f6;box-shadow:0 24px 75px #0009}.confirm-dialog p{margin:0 0 18px;font-size:15px}.confirm-dialog>div{display:flex;justify-content:flex-end;gap:8px}.confirm-dialog button{padding:8px 12px;border:0;border-radius:8px;background:#ffffff10;color:inherit}.confirm-dialog .primary{background:#d6ddea;color:#1d2734}
+
+/* 0.8：圖釘固定側邊欄、收合狀態可見控制與可靠的視窗按鈕點擊區。 */
+#desktop-titlebar{pointer-events:none!important;-webkit-app-region:no-drag!important}#desktop-titlebar .window-controls,#desktop-titlebar .window-controls button{pointer-events:auto!important;-webkit-app-region:no-drag!important;position:relative;z-index:2}
+#sidebar-toggle svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}#sidebar-toggle.pinned svg path:first-child{fill:currentColor;fill-opacity:.24}
+.sidebar-collapsed:not(.sidebar-expanded) #sidebar-toggle{position:fixed;z-index:60;display:grid!important;place-items:center;background:#202938e8;box-shadow:0 5px 18px #0006}
+.sidebar-collapsed.dock-left:not(.sidebar-expanded) #sidebar-toggle{right:3px;left:auto;top:34px}.sidebar-collapsed.dock-right:not(.sidebar-expanded) #sidebar-toggle{left:3px;right:auto;top:34px}.sidebar-collapsed.dock-top:not(.sidebar-expanded) #sidebar-toggle{left:50%;bottom:3px;top:auto;transform:translateX(-50%)}.sidebar-collapsed.dock-bottom:not(.sidebar-expanded) #sidebar-toggle{left:50%;top:3px;bottom:auto;transform:translateX(-50%)}
+
+/* 0.9：上下停靠採保留視窗控制區的響應式雙列，並提供明確的位置與尺寸控制。 */
+.dock-top #shell,.dock-bottom #shell{display:grid!important;grid-template-columns:minmax(280px,2fr) minmax(110px,.7fr) minmax(150px,1.2fr) 108px!important;grid-template-rows:minmax(54px,1fr) 42px!important;gap:6px 8px!important;align-items:stretch!important;overflow:hidden!important}
+.dock-top #shell{padding:34px 12px 14px!important}.dock-bottom #shell{padding:14px 12px 8px!important}
+.dock-top #shell header,.dock-bottom #shell header{position:static!important;grid-column:4!important;grid-row:2!important;display:flex!important;align-items:center!important;justify-content:flex-end!important;width:auto!important;min-width:0!important;height:42px!important;margin:0!important;padding:0!important;overflow:hidden!important}
+.dock-top #sidebar-toggle,.dock-bottom #sidebar-toggle{position:static!important;inset:auto!important;transform:none!important;flex:0 0 28px!important;margin:0!important}
+.dock-top #address-section,.dock-bottom #address-section{grid-column:1!important;grid-row:2!important;display:flex!important;align-items:center!important;width:100%!important;max-width:none!important;min-width:0!important;overflow:visible!important}
+.dock-top #address-form,.dock-bottom #address-form{flex:1 1 auto!important;width:auto!important;max-width:none!important;min-width:120px!important}
+.dock-top .space-heading,.dock-bottom .space-heading{grid-column:2!important;grid-row:2!important;width:auto!important;min-width:0!important;margin:0!important;align-self:stretch!important}
+.dock-top footer,.dock-bottom footer{grid-column:3!important;grid-row:2!important;display:flex!important;align-items:center!important;width:auto!important;min-width:0!important;margin:0!important;padding:0!important;overflow:hidden!important}
+.dock-top #items,.dock-bottom #items{grid-column:1/4!important;grid-row:1!important;min-width:0!important;margin:0!important;padding:0!important;overflow-x:auto!important;overflow-y:hidden!important}
+.dock-top .new-tab,.dock-bottom .new-tab{position:static!important;grid-column:4!important;grid-row:1!important;display:grid!important;place-items:center!important;width:auto!important;height:auto!important;min-width:0!important;margin:0!important;inset:auto!important;overflow:hidden!important}
+.dock-top #shell::after,.dock-bottom #shell::after{content:"";position:absolute;left:12px;right:12px;height:6px;z-index:15;cursor:grab}.dock-top #shell::after{bottom:5px}.dock-bottom #shell::after{top:4px}
+
+#desktop-titlebar{z-index:120!important}#desktop-titlebar .window-controls{isolation:isolate;padding:2px;border-radius:9px;background:#1117228f;box-shadow:0 2px 12px #0005}
+.controls-right.dock-left #window-drag-frame [data-edge=top]{right:128px!important}.controls-right.dock-right #window-drag-frame [data-edge=top]{right:calc(var(--sidebar-visible) + 128px)!important}.controls-right.dock-top #window-drag-frame [data-edge=top],.controls-right.dock-bottom #window-drag-frame [data-edge=top]{right:120px!important}
+.controls-left.dock-left #window-drag-frame [data-edge=top]{left:calc(var(--sidebar-visible) + 128px)!important}.controls-left.dock-right #window-drag-frame [data-edge=top]{left:128px!important}.controls-left.dock-top #window-drag-frame [data-edge=top],.controls-left.dock-bottom #window-drag-frame [data-edge=top]{left:120px!important}
+
+#sidebar-resize{z-index:110!important;display:block;background:#ffffff0c!important}#sidebar-resize::after{content:"";position:absolute;border-radius:2px;background:#ffffff2b}.dock-left #sidebar-resize::after,.dock-right #sidebar-resize::after{top:15%;bottom:15%;left:3px;width:2px}.dock-top #sidebar-resize::after,.dock-bottom #sidebar-resize::after{left:15%;right:15%;top:3px;height:2px}#sidebar-resize:hover::after,#sidebar-resize:focus-visible::after{background:#d8c2ffb8}
+
+.sidebar-layout-controls{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:8px 0}.desktop .sidebar-layout-controls button{padding:9px 8px;border-radius:8px;background:#ffffff08}.desktop .sidebar-layout-controls button.selected{background:#d7dfea;color:#182230;box-shadow:0 0 0 1px #fff5 inset}.sidebar-size-control{display:grid;grid-template-columns:auto minmax(120px,1fr);align-items:center;gap:12px;margin:10px 0;color:#c7cfda}.sidebar-size-control input{width:100%}
+
+/* 0.10：Space 設定分離、可靠收合／拖曳、四向防重疊與統一對話框。 */
+body.desktop{background-image:linear-gradient(#11182235,#11182235),var(--space-gradient,linear-gradient(145deg,#283c52,#684c6c)),var(--space-image,none)!important}
+.desktop #shell{background-image:linear-gradient(#0b10203d,#0b10203d),var(--space-gradient),var(--space-image)!important;background-size:cover!important;background-position:center!important}
+.sidebar-collapsed:not(.sidebar-expanded) #shell>*:not(#sidebar-toggle){visibility:hidden!important;pointer-events:none!important}
+.sidebar-collapsed:not(.sidebar-expanded) #shell::before,.sidebar-collapsed:not(.sidebar-expanded) #shell::after{display:none!important}
+.sidebar-collapsed:not(.sidebar-expanded) #sidebar-toggle{visibility:visible!important;pointer-events:auto!important;background:transparent!important;box-shadow:none!important;border:0!important}
+.sidebar-collapsed.dock-left:not(.sidebar-expanded) #sidebar-hover-zone,.sidebar-collapsed.dock-right:not(.sidebar-expanded) #sidebar-hover-zone{width:var(--sidebar-visible)!important;height:100vh!important}
+.sidebar-collapsed.dock-top:not(.sidebar-expanded) #sidebar-hover-zone,.sidebar-collapsed.dock-bottom:not(.sidebar-expanded) #sidebar-hover-zone{height:var(--sidebar-visible)!important;width:100vw!important}
+#sidebar-toggle,#sidebar-toggle:hover,#sidebar-toggle:focus-visible{background:transparent!important;box-shadow:none!important;border:0!important;outline:0!important}
+#sidebar-toggle svg{width:20px;height:20px;fill:none!important;stroke:#aeb7c5;stroke-width:1.8}
+#sidebar-toggle.pinned svg{stroke:#8dc4ff}#sidebar-toggle.pinned svg rect{fill:#69aef022}
+.dock-right #sidebar-toggle svg{transform:scaleX(-1)}.dock-top #sidebar-toggle svg{transform:rotate(90deg)}.dock-bottom #sidebar-toggle svg{transform:rotate(-90deg)}
+.dock-top #sidebar-toggle,.dock-bottom #sidebar-toggle{justify-self:center!important;align-self:center!important}
+#desktop-titlebar{left:4px!important;right:4px!important;padding:0!important;z-index:1200!important}
+#desktop-titlebar .window-controls{position:absolute;top:4px;gap:5px;padding:2px;border-radius:9px;background:#111722d4}
+.controls-right #desktop-titlebar .window-controls{right:0;left:auto;margin:0!important}.controls-left #desktop-titlebar .window-controls{left:0;right:auto;margin:0!important}
+#desktop-titlebar .window-controls button,body.darwin #desktop-titlebar .window-controls button{width:36px;min-width:36px;height:24px;border-radius:8px!important;font-size:14px!important;background:#ffffff0d!important;color:#e8ebf1!important}
+.dock-top #shell{padding-top:36px!important}.dock-bottom #shell{padding-bottom:36px!important}
+.desktop footer{display:grid!important;grid-template-columns:minmax(0,1fr) auto;grid-template-rows:auto auto;align-items:center;gap:3px!important;min-width:0!important;overflow:hidden!important}
+.desktop #spaces{grid-column:1;grid-row:1;max-width:100%;overflow-x:auto!important;overflow-y:hidden!important;scrollbar-width:thin}
+.desktop #space-add-fixed{grid-column:2;grid-row:1;flex:0 0 28px;width:28px;height:28px}.desktop .sync-line{grid-column:1/3;grid-row:2;min-width:0}
+.desktop #spaces button{flex:0 0 auto;max-width:118px;height:32px;overflow:hidden}.desktop #spaces .space-icon{width:18px;height:18px;max-width:18px;max-height:18px;object-fit:contain;border-radius:5px;flex:0 0 18px}.desktop #spaces .space-icon-fallback{display:grid;place-items:center;width:18px;height:18px;flex:0 0 18px}
+.desktop *{scrollbar-width:thin;scrollbar-color:#aeb7c559 transparent}.desktop *::-webkit-scrollbar{width:8px;height:8px}.desktop *::-webkit-scrollbar-track{background:transparent}.desktop *::-webkit-scrollbar-thumb{background:#aeb7c559;border:2px solid transparent;border-radius:999px;background-clip:padding-box}.desktop *::-webkit-scrollbar-thumb:hover{background:#cbd4e177;background-clip:padding-box}
+.desktop .action-dialog,.desktop #move-dialog{width:min(420px,calc(100% - 32px));max-width:420px;padding:18px;border:1px solid #ffffff18;border-radius:16px;background:#202938f8;color:#eef1f6;box-shadow:0 24px 80px #0009}
+.desktop .action-dialog .dialog-head,.desktop #move-dialog .dialog-head,.desktop .space-settings-dialog .dialog-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px}.desktop .action-dialog h2,.desktop #move-dialog h2,.desktop .space-settings-dialog h2{margin:0;font-size:18px}.desktop .action-dialog .dialog-head button,.desktop #move-dialog .dialog-head button,.desktop .space-settings-dialog .dialog-head button{width:32px;height:32px;padding:0;border:0;border-radius:9px;background:#ffffff0d}
+.desktop #menu-actions,.desktop .dialog-actions,.desktop #move-form{display:grid;gap:8px}.desktop #menu-actions button,.desktop .dialog-actions button,.desktop #move-dialog button{width:100%;padding:10px 12px;border:0;border-radius:9px;background:#ffffff0c;text-align:left}.desktop .dialog-actions .primary{background:#bcd5f0;color:#172231}.desktop .dialog-actions .danger{background:#b44b5877;color:#ffdce1}.desktop .action-dialog label,.desktop #move-dialog label{display:grid;gap:6px;margin:8px 0;color:#c7cfda}.desktop .action-dialog select,.desktop #move-dialog select{width:100%;padding:9px;border:1px solid #ffffff13;border-radius:8px;background:#151e2c}
+.desktop .space-settings-dialog{width:min(760px,calc(100% - 36px));max-width:760px;max-height:82vh;padding:22px 24px;border:1px solid #ffffff18;border-radius:18px;background:#202938f8;color:#eef1f6;overflow:auto;box-shadow:0 26px 90px #0009}
+.desktop .space-settings-dialog #appearance-form{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px;padding:14px;border-radius:13px;background:#ffffff06}.desktop .space-settings-dialog #appearance-form label{display:grid;gap:6px;color:#bfc8d5;font-size:12px}.desktop .space-settings-dialog #appearance-form>label:first-child,.desktop .space-settings-dialog #appearance-form>label:nth-of-type(4),.desktop .space-settings-dialog #appearance-form>label:nth-of-type(5){grid-column:1/-1}.desktop .space-settings-dialog input:not([type=color]):not([type=range]){width:100%;padding:9px;border:1px solid #ffffff12;border-radius:8px;background:#11192788}.desktop .space-settings-dialog input[type=color]{width:100%;height:40px;border:0;border-radius:8px;background:transparent}.desktop .space-settings-dialog input[type=range]{width:100%}.desktop .space-settings-dialog button{padding:8px 11px;border:0;border-radius:8px;background:#ffffff0c}.desktop .space-settings-dialog .primary{grid-column:1/-1;justify-self:end;background:#d6ddea;color:#1d2734}
+.dock-top #shell,.dock-bottom #shell{grid-template-columns:minmax(250px,1.8fr) minmax(90px,.65fr) minmax(0,1fr) 102px!important}.dock-top #shell header,.dock-bottom #shell header{grid-column:4!important;justify-content:center!important}.dock-top footer,.dock-bottom footer{grid-column:3!important;padding-right:0!important;min-width:0!important}.dock-top #items,.dock-bottom #items{grid-column:1/4!important;padding-right:0!important}
+@media (max-width:1050px){.dock-top #shell,.dock-bottom #shell{grid-template-columns:minmax(210px,1.5fr) minmax(80px,.6fr) minmax(0,.85fr) 102px!important}.dock-top #spaces .space-name,.dock-bottom #spaces .space-name{max-width:48px}}
+
+/* 0.11：控制列避讓、主題外框、無箭頭捲軸與一致拖曳游標。 */
+.controls-right.dock-right #shell,.controls-left.dock-left #shell{padding-top:42px!important}.controls-left.dock-right #shell,.controls-right.dock-left #shell{padding-top:13px!important}
+#desktop-titlebar .window-controls{padding:3px!important;border-radius:11px!important;background-image:linear-gradient(#11172280,#11172280),var(--space-gradient)!important;background-color:#111722!important;box-shadow:0 3px 16px #0007!important}
+#window-controls-menu{position:fixed!important;z-index:5000!important;min-width:120px;padding:5px;border:1px solid #ffffff20;border-radius:10px;background:#17202ef5;box-shadow:0 16px 50px #0009}#window-controls-menu button{display:block;width:100%;padding:8px;border:0;border-radius:7px;background:transparent;color:#eef1f6;text-align:left}#window-controls-menu button:hover{background:#ffffff12}
+.desktop *::-webkit-scrollbar-button{display:none!important;width:0!important;height:0!important}.desktop *::-webkit-scrollbar-corner{background:transparent!important}
+.desktop #shell,#items,.pinned-grid,.folder-content{cursor:grab}.desktop #shell:active,.desktop #shell.dragging,.desktop .docking,.desktop .docking *{cursor:grabbing!important}.desktop button,.desktop input,.desktop select,.desktop summary,.desktop .item{cursor:default}.desktop .draggable{cursor:grab}.desktop .draggable:active,.desktop .item-dragging,.desktop .item-dragging *{cursor:grabbing!important}
+#content-frame{box-shadow:0 0 0 2px #ffffff14 inset,0 8px 28px #08101f4d!important;border-radius:19px!important}
+.page-fullscreen #shell,.page-fullscreen #desktop-titlebar,.page-fullscreen #window-drag-frame,.page-fullscreen #content-frame,.page-fullscreen #sidebar-resize,.page-fullscreen #sidebar-hover-zone{visibility:hidden!important;pointer-events:none!important}.page-fullscreen{background:#000!important}
+.dock-top .folders-zone,.dock-bottom .folders-zone,.dock-top .tabs-zone,.dock-bottom .tabs-zone{display:flex;align-items:center;gap:4px;flex:0 0 auto}.layout-editing [data-layout-block]{outline:1px dashed #d9c7ff99;outline-offset:-2px;background:#ffffff08!important;cursor:grab!important}.layout-editing [data-layout-block]:active{cursor:grabbing!important}
+
+/* 0.11.0：視窗按鈕直接嵌入主題外框，不使用獨立懸浮膠囊。 */
+#desktop-titlebar .window-controls{top:0!important;padding:0!important;gap:4px!important;border:0!important;border-radius:0!important;background:transparent!important;background-image:none!important;box-shadow:none!important}
+.controls-right #desktop-titlebar .window-controls{right:0!important}.controls-left #desktop-titlebar .window-controls{left:0!important}
+#desktop-titlebar .window-controls button,body.darwin #desktop-titlebar .window-controls button{height:27px!important;border:1px solid #ffffff12!important;border-top:0!important;border-radius:0 0 8px 8px!important;background:linear-gradient(#ffffff12,#ffffff08)!important;box-shadow:none!important;color:var(--ui-color,#e8ebf1)!important}
+#desktop-titlebar .window-controls button:hover{background:linear-gradient(#ffffff24,#ffffff14)!important}
+#desktop-titlebar .window-controls #window-close:hover{background:#c84c59!important}
+#desktop-titlebar .window-controls button{position:relative!important;display:grid!important;place-items:center!important;color:transparent!important;line-height:0!important}
+#desktop-titlebar .window-controls button::before,#desktop-titlebar .window-controls button::after{content:"";position:absolute;left:50%;top:50%;width:11px;height:1.5px;border-radius:2px;background:var(--ui-color,#e8ebf1);transform:translate(-50%,-50%)}
+#desktop-titlebar #window-maximize::before{width:9px;height:8px;border:1.5px solid var(--ui-color,#e8ebf1);border-radius:1px;background:transparent}
+#desktop-titlebar #window-minimize::after,#desktop-titlebar #window-maximize::after{display:none}
+#desktop-titlebar #window-close::before{transform:translate(-50%,-50%) rotate(45deg)}#desktop-titlebar #window-close::after{transform:translate(-50%,-50%) rotate(-45deg)}
+
+/* 0.12.0：側邊欄、網頁外框間隙與視窗控制共用同一 Space 主題表面。 */
+body.desktop,.desktop #shell{background-color:transparent!important;background-image:var(--space-gradient,linear-gradient(145deg,#283c52,#684c6c)),var(--space-image,none)!important;background-size:cover!important;background-position:center!important;background-attachment:fixed!important}
+#desktop-titlebar .window-controls button,body.darwin #desktop-titlebar .window-controls button{background:linear-gradient(#ffffff12,#ffffff08)!important;border-color:#ffffff14!important}

@@ -1,0 +1,31 @@
+{
+  "name": "faidlix-arc-spaces",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "desktop": "npm run build:desktop && electron desktop-dist",
+    "debug:desktop": "npm run build:desktop && node scripts/debug-desktop.mjs",
+    "build:desktop": "tsc -p tsconfig.desktop.json && node scripts/build-desktop.mjs",
+    "package:win": "npm run build:desktop && electron-builder --config electron-builder.yml --win --x64",
+    "package:mac": "npm run build:desktop && electron-builder --config electron-builder.yml --mac",
+    "test:desktop": "node tests/desktop.mjs",
+    "build": "node scripts/build.mjs",
+    "check": "tsc --noEmit",
+    "test": "tsx --test tests/*.test.ts",
+    "test:browser": "node tests/browser.mjs",
+    "test:standalone": "node tests/standalone.mjs",
+    "package": "npm run check && npm run build && node scripts/package.mjs"
+  },
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "@types/node": "^22.10.0",
+    "electron": "^45.0.0",
+    "electron-builder": "^26.18.0",
+    "esbuild": "^0.25.0",
+    "fflate": "^0.8.2",
+    "playwright": "^1.55.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

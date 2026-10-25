@@ -1,0 +1,35 @@
+# 功能：手動建置 Windows/macOS 桌面套件；用法：GitHub Actions → Desktop build → Run workflow。正式 Mac 分發需自行配置簽署憑證。
+name: Desktop build
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build:desktop
+      - if: runner.os == 'Windows'
+        run: npm run package:win
+      - if: runner.os == 'macOS'
+        run: npm run package:mac
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Custom-Browser-${{ runner.os }}
+          path: |
+            release/*.exe
+            release/*.zip
+            release/*.dmg
+          if-no-files-found: error

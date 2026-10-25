@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- 功能：macOS Hardened Runtime 的 Chromium JIT 權限；入口：electron-builder 簽章，不提供檔案系統沙箱豁免。 -->
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0"><dict><key>com.apple.security.cs.allow-jit</key><true/></dict></plist>

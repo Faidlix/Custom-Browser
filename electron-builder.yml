@@ -1,0 +1,37 @@
+# 功能：Windows 與 macOS 桌面封裝設定。用法：npm run package:win 或在 Mac 執行 npm run package:mac；簽章由 CI 環境提供。
+appId: com.custombrowser.desktop
+productName: Custom Browser
+directories:
+  app: desktop-dist
+  output: release
+files:
+  - "**/*"
+  - "!**/*.map"
+  - "panel.js.map"
+asar: true
+npmRebuild: false
+win:
+  target:
+    - zip
+    - nsis
+  executableName: CustomBrowser
+  signAndEditExecutable: false
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+mac:
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  category: public.app-category.productivity
+  hardenedRuntime: true
+  entitlements: desktop/entitlements.mac.plist
+  entitlementsInherit: desktop/entitlements.mac.plist
+  extendInfo:
+    NSCameraUsageDescription: 網站取得你的允許後才能使用相機。
+    NSMicrophoneUsageDescription: 網站取得你的允許後才能使用麥克風。
+artifactName: "Custom-Browser-${version}-${os}-${arch}.${ext}"
