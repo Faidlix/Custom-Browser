@@ -1,6 +1,7 @@
 /** 功能：跨平台桌面瀏覽器、沙箱分頁及既有同步背景程式的主程序介接。用法：npm run desktop；CUSTOM_BROWSER_DATA 可指定獨立測試資料夾。 */
-import { app, BrowserWindow, WebContentsView, ipcMain, protocol, net, session, dialog, Menu, screen, clipboard, type WebContents } from 'electron';
-import { readFile, writeFile, rename, mkdir, access, stat, unlink, cp, rm } from 'node:fs/promises';
+import { app, BrowserWindow, WebContentsView, ipcMain, protocol, net, session, dialog, Menu, screen, clipboard, shell, type WebContents } from 'electron';
+import { readFile, writeFile, rename, mkdir, access, stat, unlink, cp, rm, readdir } from 'node:fs/promises';
+import { spawn } from 'node:child_process';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import os from 'node:os';
@@ -18,7 +19,8 @@ interface WindowEntry {win:BrowserWindow;size:number;dock:Dock;collapsed:boolean
 const windows=new Map<number,WindowEntry>();
 const onMessage=new Signal(),onCreated=new Signal(),onUpdated=new Signal(),onRemoved=new Signal(),onActivated=new Signal(),onWindowRemoved=new Signal(),onBoundsChanged=new Signal(),onCommand=new Signal(),onAlarm=new Signal();
 let stored:Record<string,any>={};let ephemeral:Record<string,any>={};let writing=Promise.resolve();let quitting=false;let initialized=false;let secondInstanceRequested=false;let startupNotice='';let oauthReady:Promise<void>=Promise.resolve();
-interface SavedExtension {folder:string;name:string;version:string;enabled:boolean;id?:string;warning?:string}
+interface SavedExtension {folder:string;name:string;version:string;enabled:boolean;id?:string;warning?:string;source?:{browser:'Chrome';profile:string;extensionId:string}}
+interface ChromeProfileInfo {id:string;name:string;account?:string;extensionCount:number}
 let installedExtensions:SavedExtension[]=[];
 const startupStarted=performance.now();const startupMetrics:{shellShownMs?:number;interfaceReadyMs?:number}={};
 async function renameWithRetry(source:string,target:string){for(let attempt=0;;attempt++){try{await rename(source,target);return;}catch(error:any){if(!['EPERM','EBUSY','EACCES'].includes(error?.code)||attempt>=4)throw error;await new Promise(resolve=>setTimeout(resolve,40*(attempt+1)));}}}
@@ -139,7 +141,7 @@ function createWindow(deferUI=false){
   win.on('enter-full-screen',boundsChanged);win.on('leave-full-screen',boundsChanged);win.on('maximize',boundsChanged);win.on('unmaximize',boundsChanged);win.on('restore',boundsChanged);
   win.on('close',event=>{if(e.tabs.size&&!e.closing){event.preventDefault();e.closing=true;void invoke(win.id,{type:'save-window-session'}).then(()=>Promise.all([...e.tabs.values()].map(t=>closeTab(t.id)))).catch(error=>{e.closing=false;recordDebug('window-session-save-failed');dialog.showErrorBox('無法保存視窗工作階段',(error as Error).message);});}});
   win.on('closed',()=>{windows.delete(win.id);onWindowRemoved.emit(win.id);});
-  revealWindow(win);if(!deferUI)loadWindowUI(e);return winMeta(e);
+  if(!hiddenTest)revealWindow(win);if(!deferUI)loadWindowUI(e);return winMeta(e);
 }
 function authorized(event:Electron.IpcMainInvokeEvent){
   const entry=[...windows.values()].find(e=>e.win.webContents.id===event.sender.id);
@@ -248,6 +250,57 @@ async function importExtension(win:BrowserWindow){
   const item:SavedExtension={folder,name:manifest.name.slice(0,200),version:manifest.version.slice(0,60),enabled:true};installedExtensions.push(item);
   try{await loadOneExtension(item);await saveExtensions();}catch(error){item.enabled=false;await saveExtensions();throw new Error(`擴充功能已匯入但不相容：${(error as Error).message}`);}return installedExtensions;
 }
+function chromeLocations(){
+  const overrideRoot=process.env.CUSTOM_BROWSER_CHROME_DATA,overrideExecutable=process.env.CUSTOM_BROWSER_CHROME_EXECUTABLE;
+  if(overrideRoot)return {root:path.resolve(overrideRoot),executables:overrideExecutable?[path.resolve(overrideExecutable)]:[]};
+  if(process.platform==='darwin')return {root:path.join(os.homedir(),'Library','Application Support','Google','Chrome'),executable:'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'};
+  const local=process.env.LOCALAPPDATA||path.join(os.homedir(),'AppData','Local');
+  const programFiles=process.env.PROGRAMFILES||'C:\\Program Files',programFilesX86=process.env['PROGRAMFILES(X86)']||'C:\\Program Files (x86)';
+  return {root:path.join(local,'Google','Chrome','User Data'),executables:[path.join(programFiles,'Google','Chrome','Application','chrome.exe'),path.join(programFilesX86,'Google','Chrome','Application','chrome.exe'),path.join(local,'Google','Chrome','Application','chrome.exe')]};
+}
+async function chromeExecutable(){const locations=chromeLocations(),candidates:Array<string>='executables' in locations?(locations.executables||[]):[locations.executable];for(const candidate of candidates){try{await access(candidate);return candidate;}catch{}}return undefined;}
+function validChromeProfile(value:string){return value==='Default'||/^Profile \d{1,4}$/.test(value);}
+async function chromeProfiles():Promise<{installed:boolean;profiles:ChromeProfileInfo[]}>{
+  const locations=chromeLocations(),executable=await chromeExecutable();let entries:Awaited<ReturnType<typeof readdir>>=[];
+  try{entries=await readdir(locations.root,{withFileTypes:true}) as any;}catch{return {installed:!!executable,profiles:[]};}
+  const profiles:ChromeProfileInfo[]=[];
+  for(const entry of entries as any[]){if(!entry.isDirectory()||!validChromeProfile(entry.name))continue;const directory=path.join(locations.root,entry.name);let preferences:any={};try{preferences=await readJsonLimited(path.join(directory,'Preferences'),20*1024*1024);}catch(error:any){if(error?.code!=='ENOENT'&&!(error instanceof SyntaxError))throw error;}
+    let extensionCount=0;try{extensionCount=(await readdir(path.join(directory,'Extensions'),{withFileTypes:true})).filter(item=>item.isDirectory()&&/^[a-p]{32}$/.test(item.name)).length;}catch{}
+    const account=Array.isArray(preferences?.account_info)?preferences.account_info.find((item:any)=>typeof item?.email==='string')?.email:undefined;
+    profiles.push({id:entry.name,name:String(preferences?.profile?.name||entry.name).slice(0,120),account:typeof account==='string'?account.slice(0,254):undefined,extensionCount});
+  }
+  return {installed:!!executable,profiles};
+}
+async function launchChrome(target:string,profile='Default'){
+  const executable=await chromeExecutable();if(!executable){await shell.openExternal('https://www.google.com/chrome/');return {opened:'download'};}
+  if(!validChromeProfile(profile))throw new Error('Chrome Profile 格式不正確');
+  await new Promise<void>((resolve,reject)=>{const child=spawn(executable,[`--profile-directory=${profile}`,target],{detached:true,stdio:'ignore'});child.once('spawn',()=>{child.unref();resolve();});child.once('error',reject);});return {opened:'chrome'};
+}
+async function extensionManifest(directory:string){
+  const manifest=await readJsonLimited(path.join(directory,'manifest.json'),2*1024*1024);
+  if(!manifest||typeof manifest.version!=='string'||![2,3].includes(manifest.manifest_version))throw new Error('Manifest 版本不支援');
+  let name=typeof manifest.name==='string'?manifest.name:'';
+  const localized=/^__MSG_(.+)__$/.exec(name);if(localized){const locale=String(manifest.default_locale||'en');try{const messages=await readJsonLimited(path.join(directory,'_locales',locale,'messages.json'),2*1024*1024);name=String(messages?.[localized[1]]?.message||name);}catch{}}
+  return {name:name.slice(0,200),version:manifest.version.slice(0,60)};
+}
+async function importChromeExtensions(profile:string){
+  if(!validChromeProfile(profile))throw new Error('Chrome Profile 格式不正確');const locations=chromeLocations(),sourceRoot=path.join(locations.root,profile,'Extensions');
+  let ids;try{ids=(await readdir(sourceRoot,{withFileTypes:true})).filter(item=>item.isDirectory()&&/^[a-p]{32}$/.test(item.name)).map(item=>item.name);}catch(error:any){if(error?.code==='ENOENT')throw new Error('此 Chrome Profile 尚未同步任何外掛');throw error;}
+  const targetRoot=path.join(app.getPath('userData'),'extensions');await mkdir(targetRoot,{recursive:true});let imported=0,updated=0,incompatible=0,skipped=0;
+  for(const extensionId of ids.slice(0,300)){
+    let versions:string[];try{versions=(await readdir(path.join(sourceRoot,extensionId),{withFileTypes:true})).filter(item=>item.isDirectory()).map(item=>item.name).sort((a,b)=>b.localeCompare(a,undefined,{numeric:true}));}catch{skipped++;continue;}if(!versions.length){skipped++;continue;}
+    const source=path.join(sourceRoot,extensionId,versions[0]);let meta;try{meta=await extensionManifest(source);}catch{skipped++;continue;}
+    const previous=installedExtensions.find(item=>item.source?.browser==='Chrome'&&item.source.profile===profile&&item.source.extensionId===extensionId);
+    if(previous&&previous.version===meta.version){skipped++;continue;}
+    const folder=crypto.randomUUID(),target=path.join(targetRoot,folder);await cp(source,target,{recursive:true,errorOnExist:true});
+    const item:SavedExtension={folder,name:meta.name||extensionId,version:meta.version,enabled:true,source:{browser:'Chrome',profile,extensionId}};
+    if(previous?.id)session.fromPartition('persist:browsing').extensions.removeExtension(previous.id);
+    try{await loadOneExtension(item);}catch(error){item.enabled=false;item.warning=`Electron 不相容：${(error as Error).message}`;incompatible++;}
+    if(previous){installedExtensions=installedExtensions.filter(value=>value!==previous);await rm(path.join(targetRoot,previous.folder),{recursive:true,force:true});updated++;}else imported++;
+    installedExtensions.push(item);
+  }
+  await saveExtensions();return {items:installedExtensions,summary:{imported,updated,incompatible,skipped,total:ids.length}};
+}
 async function initialize(){
   await mkdir(app.getPath('userData'),{recursive:true});
   protocol.handle('custom-browser',request=>{const url=new URL(request.url);const file=url.pathname.slice(1);if(url.hostname!=='ui'||!UI_FILES.has(file))return new Response('Not found',{status:404});return net.fetch(pathToFileURL(path.join(__dirname,file)).href);});
@@ -307,7 +360,10 @@ async function initialize(){
   ipcMain.handle('browser:oauth-config',async event=>{const e=authorized(event);const selected=await dialog.showOpenDialog(e.win,{title:'選取 Google Desktop OAuth JSON',filters:[{name:'JSON',extensions:['json']}],properties:['openFile']});if(selected.canceled)return false;const data=await readFile(selected.filePaths[0],'utf8');if(data.length>64000)throw new Error('設定檔過大');await configureOAuth(JSON.parse(data));notify();return true;});
   ipcMain.handle('browser:extensions',async(event,options)=>{const e=authorized(event);const action=options?.action;
     if(action==='list')return installedExtensions;
-    if(action==='store'){createTab(e.win.id,'https://chromewebstore.google.com/',true);return installedExtensions;}
+    if(action==='chrome-profiles')return chromeProfiles();
+    if(action==='chrome-signin')return launchChrome('chrome://settings/syncSetup',String(options.profile||'Default'));
+    if(action==='chrome-import')return importChromeExtensions(String(options.profile||''));
+    if(action==='store')return launchChrome('https://chromewebstore.google.com/',String(options.profile||'Default'));
     if(action==='install')return importExtension(e.win);
     const folder=typeof options?.folder==='string'?options.folder:'';const item=installedExtensions.find(x=>x.folder===folder);if(!item)throw new Error('找不到擴充功能');
     if(action==='toggle'){item.enabled=!!options.enabled;if(item.enabled)await loadOneExtension(item);else if(item.id)session.fromPartition('persist:browsing').extensions.removeExtension(item.id);await saveExtensions();return installedExtensions;}
@@ -327,7 +383,9 @@ async function initialize(){
   setInterval(()=>{if(backgroundValidationStatus().enabled)void runBackgroundValidation();},5*60*1000).unref();
   if(backgroundValidationStatus().enabled)setTimeout(()=>void runBackgroundValidation(),3000).unref();
 }
-if(!app.requestSingleInstanceLock()){app.quit();}else{
+// 隔離封裝測試不可和正式瀏覽器共用單一實例鎖，否則會喚醒正式視窗並讓測試等待到逾時。
+const isolatedInstance=process.env.CUSTOM_BROWSER_ISOLATED_INSTANCE==='1';
+if(!isolatedInstance&&!app.requestSingleInstanceLock()){app.quit();}else{
   app.on('second-instance',()=>{const win=[...windows.values()][0]?.win;if(win)revealWindow(win);else if(initialized)createWindow();else secondInstanceRequested=true;});
   void app.whenReady().then(initialize).catch(error=>{const detail=error instanceof Error?`${error.message}\n${error.stack||''}`:String(error);console.error('Custom Browser startup:',detail);void writeFile(path.join(app.getPath('userData'),'startup-error.log'),`${new Date().toISOString()}\n${detail}\n`,{mode:0o600}).catch(()=>undefined);dialog.showErrorBox('Custom Browser 無法啟動',error instanceof Error?error.message:String(error));app.quit();});
   app.on('activate',()=>{if(!windows.size)createWindow();});

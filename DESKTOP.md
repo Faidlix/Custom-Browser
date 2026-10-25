@@ -1,6 +1,8 @@
-# Custom Browser Desktop 0.12.0
+# Custom Browser Desktop 0.12.1
 
 Windows／macOS 的 Electron 桌面版。保留 Chrome 外掛原始碼，桌面版以獨立沙箱網頁視圖提供瀏覽功能。Drive 只同步 Spaces、資料夾、外觀、圖片及釘選分頁；一般分頁與整個視窗的工作階段只留在本機。
+
+0.12.1 版的擴充管理器會掃描本機 Google Chrome 的 `Default`／`Profile N`。使用者可從介面開啟真正的 Chrome 登入與同步頁，待 Chrome 將帳號的擴充功能同步到該 Profile 後，再回到 Custom Browser 重新掃描並匯入相容的解壓縮內容。Chrome Web Store 也改由真正的 Chrome 開啟，避免商店要求安裝 Chrome 的阻擋。匯入只複製擴充套件，不讀取或搬移 Google 密碼、Cookie、登入 token 與瀏覽紀錄；每個 Profile 分開標示來源。
 
 0.12 版把擴充功能載入移出啟動關鍵路徑，目標在 3 秒內顯示可操作介面；背景更新不再清除正在輸入的新增或重新命名欄位。分頁文字可雙擊原位重新搜尋，F2 原位重新命名且只有 Enter 儲存，Hover 仍顯示網頁實際標題。網頁中鍵連結採背景分頁，分頁中鍵直接關閉；資料夾選單停留在側欄且不改變網頁內容。視窗控制位置選單改為原生置頂選單，四向停靠各自保存尺寸，吸附預覽使用目標方向的實際尺寸。側邊欄、外框間隙及視窗控制共用同一 Space 主題表面。
 
@@ -25,6 +27,12 @@ Windows 安裝包與 ZIP 輸出在 `release/`。ZIP 解壓後執行 `CustomBrows
 快捷鍵：Ctrl（Mac 為 ⌘）+ K 搜尋、L 網址、T 開啟新增分頁輸入框、W 關閉目前分頁、N 新視窗、Tab 切換開啟分頁、Shift+S 下一個 Space。新增 Space、資料夾與分頁都只顯示單行輸入框，Enter 確認，Esc、右側 X 或點外側取消，沒有標題、儲存按鈕及說明文字。直接關閉一般分頁會移出本機清單；關閉整個視窗則保存本機工作階段，下次啟動還原。釘選捷徑關閉網頁後仍保留並可同步。
 
 網址列右側「⧉」會複製目前分頁網址。頂部加號只新增資料夾、分頁區下方只新增分頁、底部加號只新增 Space。設定可匯入 Chrome Bookmarks／Preferences 與 Arc 可辨識的側邊欄網址；不匯入密碼、Cookie、登入狀態或擴充功能。
+
+## Chrome 帳號擴充功能
+
+開啟「擴充功能」後，選擇 Chrome Profile。若尚未登入，按「在 Chrome 登入並同步」，在 Chrome 完成登入並開啟擴充功能同步；回來按「重新掃描」，再按「導入帳號擴充功能」。這是從 Chrome 已同步到本機的 Profile 匯入，不是讓 Electron 直接取得 Google 帳號的雲端擴充清單。
+
+Electron 只實作部分 Chrome Extensions API，因此任意 Chrome Web Store 外掛不保證相容；不相容項目會保留名稱與原因並維持停用。外掛更新後可再次匯入同一 Profile，同版本會略過，新版本會取代舊副本。要從商店安裝新外掛，按「在 Chrome 開啟擴充商店」，完成安裝／同步後再回來匯入。
 
 ## 使用者可選的偵錯模式
 
@@ -63,6 +71,7 @@ npm run desktop
 npm run debug:desktop
 npm test
 npm run test:desktop
+npm run test:desktop:soak
 npm run package:win
 ```
 
@@ -78,4 +87,4 @@ Windows 真實 Electron 自動測試結果在 `artifacts/desktop-test.json`，�
 
 已驗證外框先顯示、UI、真實網頁視圖、跨來源多分頁、保持頁面輸入、空白區四向吸附／收合 Hover、上下分頁密度、單行新增、禁止外框反白、頂端 Hover、網址複製、置頂／一般分頁規則、漸層／圖片、Chrome／Arc 匯入、備份、本機工作階段還原、背景驗證及使用者偵錯選項。`desktop-browser.png`／`desktop-native-window.png` 是 Electron UI renderer 截圖，不包含獨立 WebContentsView 的完整合成結果，不能當作整個桌面畫面驗收。
 
-待驗：Mac 實機、Apple 簽署／公證、真實 OAuth／Drive 雙裝置、受保護影音 DRM、特殊網站登入／付款彈窗。擴充管理器可匯入解壓縮的 Chrome 擴充功能並開啟 Chrome Web Store 瀏覽，但 Electron 不支援直接由商店一鍵安裝所有 CRX；Chrome 帳號同步未移植。網站只能使用隔離的 HTTP／HTTPS 分頁；檔案與程式執行協定被拒絕。這是首版桌面瀏覽器，不宣稱與 Chrome 所有網站能力完全一致。
+待驗：Mac 實機、Apple 簽署／公證、真實 OAuth／Drive 雙裝置、受保護影音 DRM、特殊網站登入／付款彈窗。擴充管理器可從已登入並完成同步的本機 Chrome Profile 匯入擴充功能，但 Electron 不支援直接由商店一鍵安裝所有 CRX，也不保證所有 Chrome Extensions API 相容。網站只能使用隔離的 HTTP／HTTPS 分頁；檔案與程式執行協定被拒絕。這是首版桌面瀏覽器，不宣稱與 Chrome 所有網站能力完全一致。

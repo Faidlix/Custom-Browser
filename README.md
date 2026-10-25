@@ -1,6 +1,6 @@
 # Custom Browser
 
-**Electron Desktop 0.5 已加入：** Windows／macOS 的 Arc 式自訂視窗、快速外框顯示、空白區四向吸附側欄、Chrome 類上／下分頁列、頂端 Hover 控制、單行新增、網址複製、Chrome／Arc 匯入、本機工作階段還原，以及可選偵錯／背景驗證模式，請見 [DESKTOP.md](DESKTOP.md)。以下保留原 Chrome 外掛的安裝與操作說明。
+**Electron Desktop 0.12.1 已加入：** Windows／macOS 的 Arc 式自訂視窗、四向側欄、Chrome 類分頁列、Chrome 帳號 Profile 擴充匯入、Drive 同步、本機工作階段還原，以及不搶焦點的背景驗證模式，請見 [DESKTOP.md](DESKTOP.md)。以下保留原 Chrome 外掛的安裝與操作說明。
 
 繁體中文 Chrome Manifest V3 側欄外掛。專案位於 `B:\AI\ArcSpaces`，提供 Spaces、置頂捷徑、資料夾、分頁清單、手動封存、搜尋／指令、自訂漸層與圖片，以及 Google Drive 同步。
 

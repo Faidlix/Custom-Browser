@@ -5,8 +5,8 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 const root=process.cwd(),exe=process.argv[2]||path.join(root,'release/win-unpacked/CustomBrowser.exe');
 const profile=await mkdtemp(path.join(root,'.desktop-profile-package-'));
-const env={...process.env,CUSTOM_BROWSER_DATA:profile,CUSTOM_BROWSER_TEST_HIDDEN:'1',TEMP:path.join(root,'.cache/tmp'),TMP:path.join(root,'.cache/tmp')};delete env.ELECTRON_RUN_AS_NODE;
-const launchStarted=Date.now(),application=await electron.launch({executablePath:exe,args:[],env,timeout:60000});const checks=[];
+const env={...process.env,CUSTOM_BROWSER_DATA:profile,CUSTOM_BROWSER_TEST_HIDDEN:'1',CUSTOM_BROWSER_ISOLATED_INSTANCE:'1',TEMP:path.join(root,'.cache/tmp'),TMP:path.join(root,'.cache/tmp')};delete env.ELECTRON_RUN_AS_NODE;
+const launchStarted=Date.now(),application=await electron.launch({executablePath:exe,args:[],env,timeout:3000});const checks=[];
 try{
  const page=await application.firstWindow();await page.locator('#space-title').filter({hasText:'日常'}).waitFor();assert(Date.now()-launchStarted<=3000,'封裝版互動介面啟動超過 3 秒');
  checks.push('實際封裝 EXE 啟動');

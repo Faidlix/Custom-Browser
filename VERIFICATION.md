@@ -1,5 +1,13 @@
 # Custom Browser 驗證紀錄
 
+## Electron Desktop 0.12.1（2026-10-26）
+
+- 擴充管理器可列出本機 Chrome Profile、顯示登入帳號與外掛數量；可在真正的 Chrome 開啟登入／同步及 Chrome Web Store，再匯入該 Profile 已同步到本機且與 Electron 相容的擴充功能。未讀取 Google 密碼、Cookie、登入 token 或瀏覽紀錄。
+- 開發建置的 20 輪獨立使用者背景模擬全部通過，涵蓋啟動、背景驗證、Chrome Profile 擴充匯入、Space、資料夾、多分頁、網址列聚焦／導覽、中鍵關閉與設定開關；最大介面就緒 2008ms，平均 1234ms。
+- 實際 `release/win-unpacked/CustomBrowser.exe` 亦完成 20 輪，全部通過；最大介面就緒 2105ms，平均 1372ms，完整結果在 `artifacts/desktop-soak-20.json`。另通過 9 項封裝原生檢查：WebContentsView、圓角視窗控制、最小化／還原、全螢幕、安全儲存、剪貼簿與無敏感內容的背景驗證。
+- Windows 0.12.1 ZIP／NSIS 已完成並更新安裝至 `B:\AI\CustomBrowser`，安裝程式回傳 0；安裝版再通過 9 項檢查。封裝及安裝版 `app.asar` SHA256 均為 `2FAE3E0CA3ABF38EBC0827C6F12E7C271F0AB1BE396951109730B09ADDD7C704`，安裝包與 ZIP 雜湊記錄在 `release/SHA256.txt`。
+- 自動測試視窗預設隱藏且使用隔離執行個體，不會喚回、覆蓋或搶占正式瀏覽器視窗。Electron 的擴充 API 僅涵蓋 Chrome API 子集，不宣稱任意商店外掛皆相容。
+
 ## Electron Desktop 0.12.0（2026-10-26）
 
 - 擴充功能改為介面顯示後在背景載入；背景資料更新不會再中斷新增資料夾、Space、分頁或原位重新命名。

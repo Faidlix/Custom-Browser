@@ -3,7 +3,7 @@ import '../src/panel';
 type Dock='left'|'right'|'top'|'bottom';
 type LayoutBlock='navigation'|'address'|'pinned'|'folders'|'tabs'|'spaces';
 interface SidebarLayout{dock:Dock;size:number;collapsed:boolean;hoverExpand:boolean;blocks?:LayoutBlock[];sizes?:Partial<Record<Dock,number>>}
-declare global {interface Window {desktop:{platform:string;control:(action:string)=>Promise<void>;controlsMenu:(side:'left'|'right',x:number,y:number)=>Promise<'left'|'right'|null>;cursorPosition:()=>Promise<{x:number;y:number}>;copyText:(value:string)=>Promise<void>;layout:(options:unknown)=>Promise<void>;syncLayout:(layout:SidebarLayout)=>Promise<any>;importProfile:(browser:'Chrome'|'Arc')=>Promise<any>;configureOAuth:()=>Promise<boolean>;extensions:(action:'list'|'install'|'toggle'|'remove'|'store',options?:Record<string,unknown>)=>Promise<any>;debug:(action:string,value?:boolean)=>Promise<any>;backgroundValidation:(action:'status'|'set'|'run',value?:boolean)=>Promise<any>;onState:(fn:(state:any)=>void)=>void;onCommand:(fn:(command:string)=>void)=>void}}}
+declare global {interface Window {desktop:{platform:string;control:(action:string)=>Promise<void>;controlsMenu:(side:'left'|'right',x:number,y:number)=>Promise<'left'|'right'|null>;cursorPosition:()=>Promise<{x:number;y:number}>;copyText:(value:string)=>Promise<void>;layout:(options:unknown)=>Promise<void>;syncLayout:(layout:SidebarLayout)=>Promise<any>;importProfile:(browser:'Chrome'|'Arc')=>Promise<any>;configureOAuth:()=>Promise<boolean>;extensions:(action:'list'|'install'|'toggle'|'remove'|'store'|'chrome-profiles'|'chrome-signin'|'chrome-import',options?:Record<string,unknown>)=>Promise<any>;debug:(action:string,value?:boolean)=>Promise<any>;backgroundValidation:(action:'status'|'set'|'run',value?:boolean)=>Promise<any>;onState:(fn:(state:any)=>void)=>void;onCommand:(fn:(command:string)=>void)=>void}}}
 const $=(id:string)=>document.getElementById(id)!;
 const input=(id:string)=>$(id) as HTMLInputElement;
 const DEFAULT_BLOCKS:LayoutBlock[]=['navigation','address','pinned','folders','tabs','spaces'];
@@ -14,7 +14,7 @@ const horizontalDock=(dock:Dock)=>dock==='top'||dock==='bottom';
 const sizeLimits=(dock:Dock)=>horizontalDock(dock)?{min:160,max:280,initial:170}:{min:240,max:480,initial:260};
 const valid=(value:any):value is SidebarLayout=>value&&['left','right','top','bottom'].includes(value.dock)&&Number.isFinite(value.size)&&typeof value.collapsed==='boolean'&&typeof value.hoverExpand==='boolean'&&(value.blocks===undefined||(Array.isArray(value.blocks)&&value.blocks.length===6&&new Set(value.blocks).size===6))&&(value.sizes===undefined||(value.sizes&&typeof value.sizes==='object'&&Object.entries(value.sizes).every(([dock,size])=>['left','right','top','bottom'].includes(dock)&&Number.isFinite(size))));
 let sidebar:SidebarLayout=DEFAULT;try{const saved=JSON.parse(localStorage.getItem('sidebar-layout')||'null');if(valid(saved))sidebar={...DEFAULT,...saved,sizes:{...DEFAULT_SIZES,...saved.sizes,[saved.dock]:saved.size}};}catch{}
-let hoverOpen=false,hoverTimer=0,titlebarExpanded=true,syncEnabled=localStorage.getItem('sidebar-layout-sync')==='true',remoteLayout:SidebarLayout|undefined,publishing=false,startupShown=false,dockingOverlay=false;
+let hoverOpen=false,hoverTimer=0,hoverSuppressedUntil=0,titlebarExpanded=true,syncEnabled=localStorage.getItem('sidebar-layout-sync')==='true',remoteLayout:SidebarLayout|undefined,publishing=false,startupShown=false,dockingOverlay=false;
 document.body.classList.add('desktop',window.desktop.platform);
 let controlsSide:'left'|'right'=localStorage.getItem('window-controls-side')==='left'?'left':'right';
 const showToast=(message:string)=>{$('toast').textContent=message;$('toast').hidden=false;setTimeout(()=>$('toast').hidden=true,6000);};
@@ -37,15 +37,15 @@ for(const action of ['minimize','maximize','close']){const button=$(`window-${ac
 const controls=$('desktop-titlebar').querySelector<HTMLElement>('.window-controls')!;
 const applyControlsSide=()=>{document.body.classList.toggle('controls-left',controlsSide==='left');document.body.classList.toggle('controls-right',controlsSide==='right');};applyControlsSide();
 controls.oncontextmenu=e=>{e.preventDefault();e.stopPropagation();void window.desktop.controlsMenu(controlsSide,e.clientX,e.clientY).then(side=>{if(!side)return;controlsSide=side;localStorage.setItem('window-controls-side',controlsSide);applyControlsSide();}).catch(error=>showToast(error.message));};
-$('sidebar-toggle').onclick=()=>{sidebar={...sidebar,collapsed:!sidebar.collapsed};hoverOpen=false;save();};
+$('sidebar-toggle').onclick=()=>{const collapsing=!sidebar.collapsed;sidebar={...sidebar,collapsed:collapsing};hoverOpen=false;if(collapsing)hoverSuppressedUntil=Date.now()+500;save();};
 const hoverZone=$('sidebar-hover-zone'),shell=$('shell');
 const cancelHover=()=>{clearTimeout(hoverTimer);hoverTimer=0;};
-const openHover=()=>{cancelHover();if(sidebar.collapsed&&sidebar.hoverExpand&&!document.querySelector('dialog[open]')){hoverOpen=true;layout();}};
+const openHover=()=>{cancelHover();if(Date.now()<hoverSuppressedUntil)return;if(sidebar.collapsed&&sidebar.hoverExpand&&!document.querySelector('dialog[open]')){hoverOpen=true;layout();}};
 const closeHover=()=>{if(hoverTimer)return;hoverTimer=window.setTimeout(()=>{hoverTimer=0;if(sidebar.collapsed&&!document.querySelector('dialog[open]')){hoverOpen=false;layout();}},280);};
 const beyondCollapseThreshold=({x,y}:{x:number;y:number})=>sidebar.dock==='left'?x>=sidebar.size*1.5:sidebar.dock==='right'?x<=innerWidth-sidebar.size*1.5:sidebar.dock==='top'?y>=sidebar.size*1.5:y<=innerHeight-sidebar.size*1.5;
 let cursorProbe=false;
 window.setInterval(()=>{if(cursorProbe||!sidebar.collapsed||!hoverOpen||document.querySelector('dialog[open]'))return;cursorProbe=true;void window.desktop.cursorPosition().then(point=>{if(beyondCollapseThreshold(point))closeHover();else cancelHover();}).catch(()=>undefined).finally(()=>{cursorProbe=false;});},90);
-hoverZone.onpointerenter=openHover;shell.onpointerenter=()=>{cancelHover();if(sidebar.collapsed&&!hoverOpen)openHover();};
+hoverZone.onpointerenter=openHover;shell.onpointerenter=()=>{cancelHover();if(sidebar.collapsed&&!hoverOpen)openHover();};shell.onpointermove=()=>{if(sidebar.collapsed&&!hoverOpen)openHover();};
 const grip=$('sidebar-resize');grip.onpointerdown=e=>grip.setPointerCapture(e.pointerId);
 grip.onpointermove=e=>{if(!grip.hasPointerCapture(e.pointerId))return;const limits=sizeLimits(sidebar.dock),raw=sidebar.dock==='left'?e.clientX:sidebar.dock==='right'?innerWidth-e.clientX:sidebar.dock==='top'?e.clientY:innerHeight-e.clientY,size=Math.max(limits.min,Math.min(limits.max,raw));sidebar={...sidebar,size,sizes:{...DEFAULT_SIZES,...sidebar.sizes,[sidebar.dock]:size}};layout();};
 grip.onpointerup=e=>{grip.releasePointerCapture(e.pointerId);save();};

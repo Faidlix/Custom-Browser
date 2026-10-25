@@ -19,7 +19,7 @@ contextBridge.exposeInMainWorld('desktop', {
   configureOAuth: () => ipcRenderer.invoke('browser:oauth-config'),
   debug: (action: string, value?: boolean) => ipcRenderer.invoke('browser:debug', {action,value}),
   backgroundValidation: (action: 'status'|'set'|'run', value?: boolean) => ipcRenderer.invoke('browser:background-validation', {action,value}),
-  extensions: (action: 'list'|'install'|'toggle'|'remove'|'store', options: Record<string,unknown> = {}) => ipcRenderer.invoke('browser:extensions', {action,...options}),
+  extensions: (action: 'list'|'install'|'toggle'|'remove'|'store'|'chrome-profiles'|'chrome-signin'|'chrome-import', options: Record<string,unknown> = {}) => ipcRenderer.invoke('browser:extensions', {action,...options}),
   onState: (fn: (state: unknown) => void) => ipcRenderer.on('browser:state', (_event, state) => fn(state)),
   onCommand: (fn: (command: string) => void) => ipcRenderer.on('browser:command', (_event, command) => fn(command))
 });

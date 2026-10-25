@@ -10,6 +10,7 @@
     "package:win": "npm run build:desktop && electron-builder --config electron-builder.yml --win --x64",
     "package:mac": "npm run build:desktop && electron-builder --config electron-builder.yml --mac",
     "test:desktop": "node tests/desktop.mjs",
+    "test:desktop:soak": "node tests/desktop-soak.mjs 20",
     "build": "node scripts/build.mjs",
     "check": "tsc --noEmit",
     "test": "tsx --test tests/*.test.ts",
