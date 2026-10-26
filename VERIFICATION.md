@@ -1,5 +1,13 @@
 # Custom Browser 驗證紀錄
 
+## Electron Desktop 0.12.2（2026-10-26）
+
+- 啟動視窗先載入內嵌輕量畫面，完成工作階段讀取後再切換到主介面；主視窗仍以 3 秒為可見啟動門檻。
+- 上下分頁欄預設高度降為 108px，舊版過高的水平配置會一次性遷移；分頁依數量顯示完整標題、省略標題或只留 favicon，且水平捲軸完全隱藏。
+- 擴充管理器改為緊湊卡片與一致的輸入、按鈕、狀態樣式，保留 Chrome Profile 掃描、同步登入、商店與匯入操作。
+- 真實 Electron 全流程 40 項通過，測試通道首個視窗 851ms；Windows 封裝版 20 輪隔離使用者模擬全部通過，最大可操作時間 2465ms、平均 1787ms。封裝版與暖啟動後的正式安裝版各通過 9 項原生檢查。安裝後首次冷啟動曾在 Playwright 3000ms 連線門檻逾時，第二次即通過，因此不宣稱所有機器第一次啟動必定低於 3 秒；載入畫面會先顯示，避免長時間空白。
+- Windows 0.12.2 ZIP／NSIS 已完成並更新安裝至 `B:\AI\CustomBrowser`，安裝程式回傳 0。封裝及安裝版 `app.asar` SHA256 均為 `DBC8BC053DF6FB4905E904FBD24132C02CE5C6D6411F981AABCEA6FD98E45C51`；安裝包與 ZIP 雜湊記錄在 `release/SHA256.txt`。
+
 ## Electron Desktop 0.12.1（2026-10-26）
 
 - 擴充管理器可列出本機 Chrome Profile、顯示登入帳號與外掛數量；可在真正的 Chrome 開啟登入／同步及 Chrome Web Store，再匯入該 Profile 已同步到本機且與 Electron 相容的擴充功能。未讀取 Google 密碼、Cookie、登入 token 或瀏覽紀錄。

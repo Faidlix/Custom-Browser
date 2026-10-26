@@ -71,9 +71,9 @@ export function validateEntity(v: unknown): v is Entity {
     const layout = e.layout;
     return typeof e.addressBar === 'boolean' && (e.style===undefined||validStyle(e.style)) && (layout === undefined || (
       ['left', 'right', 'top', 'bottom'].includes(layout.dock) &&
-      Number.isFinite(layout.size) && layout.size >= 120 && layout.size <= 500 &&
+      Number.isFinite(layout.size) && layout.size >= (layout.dock==='top'||layout.dock==='bottom'?96:120) && layout.size <= 500 &&
       typeof layout.collapsed === 'boolean' && typeof layout.hoverExpand === 'boolean' &&
-      (layout.sizes===undefined||(!!layout.sizes&&typeof layout.sizes==='object'&&Object.entries(layout.sizes).every(([dock,size])=>['left','right','top','bottom'].includes(dock)&&Number.isFinite(size)&&Number(size)>=120&&Number(size)<=500))) &&
+      (layout.sizes===undefined||(!!layout.sizes&&typeof layout.sizes==='object'&&Object.entries(layout.sizes).every(([dock,size])=>['left','right','top','bottom'].includes(dock)&&Number.isFinite(size)&&Number(size)>=(dock==='top'||dock==='bottom'?96:120)&&Number(size)<=500))) &&
       (layout.blocks===undefined||(Array.isArray(layout.blocks)&&layout.blocks.length===6&&new Set(layout.blocks).size===6&&layout.blocks.every(x=>DEFAULT_BLOCKS.includes(x))))
     ));
   }

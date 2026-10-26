@@ -7,13 +7,13 @@ declare global {interface Window {desktop:{platform:string;control:(action:strin
 const $=(id:string)=>document.getElementById(id)!;
 const input=(id:string)=>$(id) as HTMLInputElement;
 const DEFAULT_BLOCKS:LayoutBlock[]=['navigation','address','pinned','folders','tabs','spaces'];
-const DEFAULT_SIZES:Record<Dock,number>={left:260,right:260,top:170,bottom:170};
+const DEFAULT_SIZES:Record<Dock,number>={left:260,right:260,top:108,bottom:108};
 const DEFAULT:SidebarLayout={dock:'left',size:260,collapsed:false,hoverExpand:true,blocks:[...DEFAULT_BLOCKS],sizes:{...DEFAULT_SIZES}};
 const COLLAPSED_SIZE=34;
 const horizontalDock=(dock:Dock)=>dock==='top'||dock==='bottom';
-const sizeLimits=(dock:Dock)=>horizontalDock(dock)?{min:160,max:280,initial:170}:{min:240,max:480,initial:260};
+const sizeLimits=(dock:Dock)=>horizontalDock(dock)?{min:96,max:220,initial:108}:{min:240,max:480,initial:260};
 const valid=(value:any):value is SidebarLayout=>value&&['left','right','top','bottom'].includes(value.dock)&&Number.isFinite(value.size)&&typeof value.collapsed==='boolean'&&typeof value.hoverExpand==='boolean'&&(value.blocks===undefined||(Array.isArray(value.blocks)&&value.blocks.length===6&&new Set(value.blocks).size===6))&&(value.sizes===undefined||(value.sizes&&typeof value.sizes==='object'&&Object.entries(value.sizes).every(([dock,size])=>['left','right','top','bottom'].includes(dock)&&Number.isFinite(size))));
-let sidebar:SidebarLayout=DEFAULT;try{const saved=JSON.parse(localStorage.getItem('sidebar-layout')||'null');if(valid(saved))sidebar={...DEFAULT,...saved,sizes:{...DEFAULT_SIZES,...saved.sizes,[saved.dock]:saved.size}};}catch{}
+let sidebar:SidebarLayout=DEFAULT;try{const saved=JSON.parse(localStorage.getItem('sidebar-layout')||'null');if(valid(saved)){const migrateCompact=localStorage.getItem('sidebar-compact-v2')!=='1',migratedSizes={...DEFAULT_SIZES,...saved.sizes,[saved.dock]:saved.size};for(const dock of ['top','bottom'] as const)if(migratedSizes[dock]===170||(migrateCompact&&migratedSizes[dock]>132))migratedSizes[dock]=108;const size=horizontalDock(saved.dock)&&(saved.size===170||(migrateCompact&&saved.size>132))?108:saved.size;sidebar={...DEFAULT,...saved,size,sizes:migratedSizes};}localStorage.setItem('sidebar-compact-v2','1');}catch{}
 let hoverOpen=false,hoverTimer=0,hoverSuppressedUntil=0,titlebarExpanded=true,syncEnabled=localStorage.getItem('sidebar-layout-sync')==='true',remoteLayout:SidebarLayout|undefined,publishing=false,startupShown=false,dockingOverlay=false;
 document.body.classList.add('desktop',window.desktop.platform);
 let controlsSide:'left'|'right'=localStorage.getItem('window-controls-side')==='left'?'left':'right';

@@ -9,13 +9,15 @@ import { UI_URL, RPC_TYPES, browsingURL, validateMessage } from './security';
 import { loadOAuth, configureOAuth, oauthConfigured, getToken, clearTokens, invalidateAccess } from './oauth';
 import {loadDebug,debugAction,recordDebug,backgroundValidationStatus,setBackgroundValidation,storeValidationResult,type ValidationResult} from './debug';
 
+const SPLASH_URL=pathToFileURL(path.join(__dirname,'splash.html')).href;
+
 app.setName('Custom Browser');
 if(process.env.CUSTOM_BROWSER_DATA) app.setPath('userData',path.resolve(process.env.CUSTOM_BROWSER_DATA));
 protocol.registerSchemesAsPrivileged([{scheme:'custom-browser',privileges:{standard:true,secure:true,supportFetchAPI:true}}]);
 class Signal {listeners: Array<(...args:any[])=>any>=[];addListener(fn:(...args:any[])=>any){this.listeners.push(fn);}emit(...args:any[]){for(const fn of this.listeners)fn(...args);}}
 interface Tab {id:number;windowId:number;view:WebContentsView;url:string;pendingUrl?:string;title:string;favIconUrl?:string;active:boolean;index:number;incognito:false;status:string;error?:string}
 type Dock = 'left'|'right'|'top'|'bottom';
-interface WindowEntry {win:BrowserWindow;size:number;dock:Dock;collapsed:boolean;expanded:boolean;overlay:boolean;titlebarExpanded:boolean;pageFullscreen:boolean;closing:boolean;restoreStarted:boolean;uiLoadStarted:boolean;tabs:Map<number,Tab>;active?:number}
+interface WindowEntry {win:BrowserWindow;size:number;dock:Dock;collapsed:boolean;expanded:boolean;overlay:boolean;titlebarExpanded:boolean;pageFullscreen:boolean;closing:boolean;restoreStarted:boolean;uiLoadStarted:boolean;splashReady?:Promise<void>;tabs:Map<number,Tab>;active?:number}
 const windows=new Map<number,WindowEntry>();
 const onMessage=new Signal(),onCreated=new Signal(),onUpdated=new Signal(),onRemoved=new Signal(),onActivated=new Signal(),onWindowRemoved=new Signal(),onBoundsChanged=new Signal(),onCommand=new Signal(),onAlarm=new Signal();
 let stored:Record<string,any>={};let ephemeral:Record<string,any>={};let writing=Promise.resolve();let quitting=false;let initialized=false;let secondInstanceRequested=false;let startupNotice='';let oauthReady:Promise<void>=Promise.resolve();
@@ -39,7 +41,7 @@ function layout(e:WindowEntry){
   if(e.win.isDestroyed())return;
   const [width,height]=e.win.getContentSize();
   const maximum=e.dock==='left'||e.dock==='right'?width-320:height-220;
-  const minimum=e.dock==='left'||e.dock==='right'?240:160,sidebar=Math.max(34,Math.min(e.collapsed&&!e.expanded?34:Math.max(minimum,e.size),maximum));
+  const minimum=e.dock==='left'||e.dock==='right'?240:96,sidebar=Math.max(34,Math.min(e.collapsed&&!e.expanded?34:Math.max(minimum,e.size),maximum));
   const gap=8,top=30,bottom=8,outer=8;
   let bounds={x:outer,y:top,width:Math.max(200,width-outer*2),height:Math.max(100,height-top-bottom)};
   if(e.pageFullscreen)bounds={x:0,y:0,width,height};
@@ -125,15 +127,15 @@ function installDownloadHandler(s:Electron.Session){
 }
 function loadWindowUI(e:WindowEntry){
   if(e.uiLoadStarted||e.win.isDestroyed())return;e.uiLoadStarted=true;const win=e.win;
-  win.webContents.on('did-finish-load',()=>{startupMetrics.interfaceReadyMs??=Math.round(performance.now()-startupStarted);layout(e);if(!e.restoreStarted){e.restoreStarted=true;void invoke(win.id,{type:'restore-window-session'}).catch(()=>recordDebug('window-session-restore-failed'));}});
+  win.webContents.on('did-finish-load',()=>{if(win.webContents.getURL()!==UI_URL)return;startupMetrics.interfaceReadyMs??=Math.round(performance.now()-startupStarted);layout(e);if(!e.restoreStarted){e.restoreStarted=true;void invoke(win.id,{type:'restore-window-session'}).catch(()=>recordDebug('window-session-restore-failed'));}});
   void win.loadURL(UI_URL).catch(error=>{recordDebug('ui-load-failed');dialog.showErrorBox('Custom Browser 介面載入失敗',(error as Error).message);if(!win.isDestroyed())win.destroy();});
 }
 function createWindow(deferUI=false){
   const hiddenTest=process.env.CUSTOM_BROWSER_TEST_HIDDEN==='1';
-  const win=new BrowserWindow({width:1320,height:880,minWidth:800,minHeight:560,frame:false,show:!hiddenTest,backgroundColor:'#222838',title:'Custom Browser',webPreferences:{preload:path.join(__dirname,'preload.cjs'),sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true,backgroundThrottling:!hiddenTest}});
-  const e:WindowEntry={win,size:260,dock:'left',collapsed:false,expanded:false,overlay:false,titlebarExpanded:false,pageFullscreen:false,closing:false,restoreStarted:false,uiLoadStarted:false,tabs:new Map()};windows.set(win.id,e);startupMetrics.shellShownMs??=Math.round(performance.now()-startupStarted);
+  const win=new BrowserWindow({width:1320,height:880,minWidth:800,minHeight:560,frame:false,show:false,backgroundColor:'#222838',title:'Custom Browser',webPreferences:{preload:path.join(__dirname,'preload.cjs'),sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true,backgroundThrottling:!hiddenTest}});
+  const e:WindowEntry={win,size:260,dock:'left',collapsed:false,expanded:false,overlay:false,titlebarExpanded:false,pageFullscreen:false,closing:false,restoreStarted:false,uiLoadStarted:false,tabs:new Map()};windows.set(win.id,e);
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
-  win.webContents.on('will-navigate',(event,url)=>{if(url!==UI_URL)event.preventDefault();});
+  win.webContents.on('will-navigate',(event,url)=>{if(url!==UI_URL&&url!==SPLASH_URL)event.preventDefault();});
   win.webContents.on('will-attach-webview',event=>event.preventDefault());
   shortcut(win.webContents,win.id);
   win.on('resize',()=>{layout(e);onBoundsChanged.emit();});
@@ -141,7 +143,8 @@ function createWindow(deferUI=false){
   win.on('enter-full-screen',boundsChanged);win.on('leave-full-screen',boundsChanged);win.on('maximize',boundsChanged);win.on('unmaximize',boundsChanged);win.on('restore',boundsChanged);
   win.on('close',event=>{if(e.tabs.size&&!e.closing){event.preventDefault();e.closing=true;void invoke(win.id,{type:'save-window-session'}).then(()=>Promise.all([...e.tabs.values()].map(t=>closeTab(t.id)))).catch(error=>{e.closing=false;recordDebug('window-session-save-failed');dialog.showErrorBox('無法保存視窗工作階段',(error as Error).message);});}});
   win.on('closed',()=>{windows.delete(win.id);onWindowRemoved.emit(win.id);});
-  if(!hiddenTest)revealWindow(win);if(!deferUI)loadWindowUI(e);return winMeta(e);
+  if(deferUI)e.splashReady=win.loadFile(path.join(__dirname,'splash.html')).then(()=>{startupMetrics.shellShownMs??=Math.round(performance.now()-startupStarted);if(!hiddenTest)revealWindow(win);}).catch(()=>{startupMetrics.shellShownMs??=Math.round(performance.now()-startupStarted);if(!hiddenTest)revealWindow(win);});
+  else{if(!hiddenTest)win.once('ready-to-show',()=>revealWindow(win));loadWindowUI(e);}return winMeta(e);
 }
 function authorized(event:Electron.IpcMainInvokeEvent){
   const entry=[...windows.values()].find(e=>e.win.webContents.id===event.sender.id);
@@ -305,6 +308,7 @@ async function initialize(){
   await mkdir(app.getPath('userData'),{recursive:true});
   protocol.handle('custom-browser',request=>{const url=new URL(request.url);const file=url.pathname.slice(1);if(url.hostname!=='ui'||!UI_FILES.has(file))return new Response('Not found',{status:404});return net.fetch(pathToFileURL(path.join(__dirname,file)).href);});
   const bootstrapWindowId=createWindow(true).id;
+  await windows.get(bootstrapWindowId)?.splashReady;
   const debugReady=loadDebug();
   oauthReady=loadOAuth().catch(()=>{startupNotice=startupNotice||'Google OAuth 設定載入失敗；本機瀏覽功能仍可使用';});
   const storageFile=path.join(app.getPath('userData'),'storage.json');
@@ -354,7 +358,7 @@ async function initialize(){
   });
   ipcMain.handle('browser:controls-menu',(event,options)=>{const e=authorized(event);if(!['left','right'].includes(options?.side)||!Number.isFinite(options?.x)||!Number.isFinite(options?.y))throw new Error('無效的視窗控制選單');return new Promise<'left'|'right'|null>(resolve=>{let picked:'left'|'right'|null=null;const menu=Menu.buildFromTemplate([{label:'靠左',type:'radio',checked:options.side==='left',click:()=>{picked='left';}},{label:'靠右',type:'radio',checked:options.side==='right',click:()=>{picked='right';}}]);menu.popup({window:e.win,x:Math.round(options.x),y:Math.round(options.y),callback:()=>resolve(picked)});});});
   ipcMain.handle('browser:cursor-position',event=>{const win=authorized(event).win,point=screen.getCursorScreenPoint(),bounds=win.getContentBounds();return {x:point.x-bounds.x,y:point.y-bounds.y};});
-  ipcMain.handle('browser:layout',(event,options)=>{const e=authorized(event);if(!Number.isFinite(options?.size)||!['left','right','top','bottom'].includes(options?.dock)||typeof options.collapsed!=='boolean'||typeof options.expanded!=='boolean'||typeof options.overlay!=='boolean'||typeof options.titlebarExpanded!=='boolean')throw new Error('無效布局');const horizontal=options.dock==='top'||options.dock==='bottom';e.size=Math.max(horizontal?160:240,Math.min(horizontal?280:480,options.size));e.dock=options.dock;e.collapsed=options.collapsed;e.expanded=options.expanded;e.overlay=options.overlay;e.titlebarExpanded=options.titlebarExpanded;layout(e);});
+  ipcMain.handle('browser:layout',(event,options)=>{const e=authorized(event);if(!Number.isFinite(options?.size)||!['left','right','top','bottom'].includes(options?.dock)||typeof options.collapsed!=='boolean'||typeof options.expanded!=='boolean'||typeof options.overlay!=='boolean'||typeof options.titlebarExpanded!=='boolean')throw new Error('無效布局');const horizontal=options.dock==='top'||options.dock==='bottom';e.size=Math.max(horizontal?96:240,Math.min(horizontal?220:480,options.size));e.dock=options.dock;e.collapsed=options.collapsed;e.expanded=options.expanded;e.overlay=options.overlay;e.titlebarExpanded=options.titlebarExpanded;layout(e);});
   ipcMain.handle('browser:layout-sync',(event,sidebar)=>invoke(authorized(event).win.id,{type:'settings',layout:sidebar}));
   ipcMain.handle('browser:profile-import',async(event,browser)=>{const e=authorized(event);if(!['Chrome','Arc'].includes(browser))throw new Error('不支援的瀏覽器');return importBrowserProfile(e.win,browser);});
   ipcMain.handle('browser:oauth-config',async event=>{const e=authorized(event);const selected=await dialog.showOpenDialog(e.win,{title:'選取 Google Desktop OAuth JSON',filters:[{name:'JSON',extensions:['json']}],properties:['openFile']});if(selected.canceled)return false;const data=await readFile(selected.filePaths[0],'utf8');if(data.length>64000)throw new Error('設定檔過大');await configureOAuth(JSON.parse(data));notify();return true;});

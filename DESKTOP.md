@@ -1,8 +1,10 @@
-# Custom Browser Desktop 0.12.1
+# Custom Browser Desktop 0.12.2
 
 Windows／macOS 的 Electron 桌面版。保留 Chrome 外掛原始碼，桌面版以獨立沙箱網頁視圖提供瀏覽功能。Drive 只同步 Spaces、資料夾、外觀、圖片及釘選分頁；一般分頁與整個視窗的工作階段只留在本機。
 
-0.12.1 版的擴充管理器會掃描本機 Google Chrome 的 `Default`／`Profile N`。使用者可從介面開啟真正的 Chrome 登入與同步頁，待 Chrome 將帳號的擴充功能同步到該 Profile 後，再回到 Custom Browser 重新掃描並匯入相容的解壓縮內容。Chrome Web Store 也改由真正的 Chrome 開啟，避免商店要求安裝 Chrome 的阻擋。匯入只複製擴充套件，不讀取或搬移 Google 密碼、Cookie、登入 token 與瀏覽紀錄；每個 Profile 分開標示來源。
+0.12.2 版啟動時會先顯示輕量載入畫面，再於背景讀取工作階段與擴充功能；上下分頁欄改為緊湊雙列，分頁依數量從省略文字逐步縮成只顯示 favicon，且不出現水平滑桿。擴充管理器也改成較精簡、可縮放且不會被原生按鈕樣式撐開的版面。
+
+擴充管理器會掃描本機 Google Chrome 的 `Default`／`Profile N`。使用者可從介面開啟真正的 Chrome 登入與同步頁，待 Chrome 將帳號的擴充功能同步到該 Profile 後，再回到 Custom Browser 重新掃描並匯入相容的解壓縮內容。Chrome Web Store 也改由真正的 Chrome 開啟，避免商店要求安裝 Chrome 的阻擋。匯入只複製擴充套件，不讀取或搬移 Google 密碼、Cookie、登入 token 與瀏覽紀錄；每個 Profile 分開標示來源。
 
 0.12 版把擴充功能載入移出啟動關鍵路徑，目標在 3 秒內顯示可操作介面；背景更新不再清除正在輸入的新增或重新命名欄位。分頁文字可雙擊原位重新搜尋，F2 原位重新命名且只有 Enter 儲存，Hover 仍顯示網頁實際標題。網頁中鍵連結採背景分頁，分頁中鍵直接關閉；資料夾選單停留在側欄且不改變網頁內容。視窗控制位置選單改為原生置頂選單，四向停靠各自保存尺寸，吸附預覽使用目標方向的實際尺寸。側邊欄、外框間隙及視窗控制共用同一 Space 主題表面。
 
