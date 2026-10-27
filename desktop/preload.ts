@@ -14,6 +14,7 @@ contextBridge.exposeInMainWorld('desktop', {
   cursorPosition: () => ipcRenderer.invoke('browser:cursor-position'),
   copyText: (value: string) => ipcRenderer.invoke('browser:clipboard-write', value),
   layout: (options: unknown) => ipcRenderer.invoke('browser:layout', options),
+  composite: (action: 'list'|'create'|'select'|'close'|'ungroup', options: Record<string,unknown> = {}) => ipcRenderer.invoke('browser:composite', {action,...options}),
   syncLayout: (layout: unknown) => ipcRenderer.invoke('browser:layout-sync', layout),
   importProfile: (browser: 'Chrome'|'Arc') => ipcRenderer.invoke('browser:profile-import', browser),
   configureOAuth: () => ipcRenderer.invoke('browser:oauth-config'),
@@ -21,5 +22,6 @@ contextBridge.exposeInMainWorld('desktop', {
   backgroundValidation: (action: 'status'|'set'|'run', value?: boolean) => ipcRenderer.invoke('browser:background-validation', {action,value}),
   extensions: (action: 'list'|'install'|'toggle'|'remove'|'store'|'chrome-profiles'|'chrome-signin'|'chrome-import', options: Record<string,unknown> = {}) => ipcRenderer.invoke('browser:extensions', {action,...options}),
   onState: (fn: (state: unknown) => void) => ipcRenderer.on('browser:state', (_event, state) => fn(state)),
-  onCommand: (fn: (command: string) => void) => ipcRenderer.on('browser:command', (_event, command) => fn(command))
+  onCommand: (fn: (command: string) => void) => ipcRenderer.on('browser:command', (_event, command) => fn(command)),
+  onComposite: (fn: (groups: unknown[]) => void) => ipcRenderer.on('browser:composites', (_event, groups) => fn(groups))
 });

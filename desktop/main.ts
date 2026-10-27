@@ -17,7 +17,9 @@ protocol.registerSchemesAsPrivileged([{scheme:'custom-browser',privileges:{stand
 class Signal {listeners: Array<(...args:any[])=>any>=[];addListener(fn:(...args:any[])=>any){this.listeners.push(fn);}emit(...args:any[]){for(const fn of this.listeners)fn(...args);}}
 interface Tab {id:number;windowId:number;view:WebContentsView;url:string;pendingUrl?:string;title:string;favIconUrl?:string;active:boolean;index:number;incognito:false;status:string;error?:string}
 type Dock = 'left'|'right'|'top'|'bottom';
-interface WindowEntry {win:BrowserWindow;size:number;dock:Dock;collapsed:boolean;expanded:boolean;overlay:boolean;titlebarExpanded:boolean;pageFullscreen:boolean;closing:boolean;restoreStarted:boolean;uiLoadStarted:boolean;splashReady?:Promise<void>;tabs:Map<number,Tab>;active?:number}
+type SplitLayout='columns'|'rows'|'main-left'|'main-top'|'grid';
+interface CompositeTab{id:string;title:string;layout:SplitLayout;tabIds:number[]}
+interface WindowEntry {win:BrowserWindow;size:number;dock:Dock;collapsed:boolean;expanded:boolean;overlay:boolean;titlebarExpanded:boolean;pageFullscreen:boolean;closing:boolean;restoreStarted:boolean;uiLoadStarted:boolean;splashReady?:Promise<void>;tabs:Map<number,Tab>;active?:number;activeComposite?:string;composites:Map<string,CompositeTab>}
 const windows=new Map<number,WindowEntry>();
 const onMessage=new Signal(),onCreated=new Signal(),onUpdated=new Signal(),onRemoved=new Signal(),onActivated=new Signal(),onWindowRemoved=new Signal(),onBoundsChanged=new Signal(),onCommand=new Signal(),onAlarm=new Signal();
 let stored:Record<string,any>={};let ephemeral:Record<string,any>={};let writing=Promise.resolve();let quitting=false;let initialized=false;let secondInstanceRequested=false;let startupNotice='';let oauthReady:Promise<void>=Promise.resolve();
@@ -37,12 +39,15 @@ function revealWindow(win:BrowserWindow){
   if(!visible)win.center();win.setSkipTaskbar(false);win.show();win.moveTop();win.focus();
 }
 function notify(){for(const e of windows.values())if(!e.win.isDestroyed())e.win.webContents.send('browser:changed',{event:'changed'});}
+function compositeMeta(e:WindowEntry){return[...e.composites.values()].map(group=>({...group,active:e.activeComposite===group.id,panes:group.tabIds.map(id=>{const tab=e.tabs.get(id);return tab?{id,title:tab.title,url:tab.url,favIconUrl:tab.favIconUrl}:undefined;}).filter(Boolean)}));}
+function notifyComposites(e:WindowEntry){if(!e.win.isDestroyed())e.win.webContents.send('browser:composites',compositeMeta(e));}
+function splitBounds(bounds:Electron.Rectangle,count:number,kind:SplitLayout){const gap=6,x=bounds.x,y=bounds.y,w=bounds.width,h=bounds.height;const cells:Electron.Rectangle[]=[];if(kind==='rows'){const each=Math.floor((h-gap*(count-1))/count);for(let i=0;i<count;i++)cells.push({x,y:y+i*(each+gap),width:w,height:i===count-1?h-i*(each+gap):each});return cells;}if(kind==='grid'){const cols=Math.ceil(Math.sqrt(count)),rows=Math.ceil(count/cols),cw=Math.floor((w-gap*(cols-1))/cols),ch=Math.floor((h-gap*(rows-1))/rows);for(let i=0;i<count;i++){const col=i%cols,row=Math.floor(i/cols);cells.push({x:x+col*(cw+gap),y:y+row*(ch+gap),width:col===cols-1?w-col*(cw+gap):cw,height:row===rows-1?h-row*(ch+gap):ch});}return cells;}if((kind==='main-left'||kind==='main-top')&&count>2){if(kind==='main-left'){const main=Math.floor((w-gap)*.6),rest=Math.floor((h-gap*(count-2))/(count-1));cells.push({x,y,width:main,height:h});for(let i=1;i<count;i++)cells.push({x:x+main+gap,y:y+(i-1)*(rest+gap),width:w-main-gap,height:i===count-1?h-(i-1)*(rest+gap):rest});}else{const main=Math.floor((h-gap)*.6),rest=Math.floor((w-gap*(count-2))/(count-1));cells.push({x,y,width:w,height:main});for(let i=1;i<count;i++)cells.push({x:x+(i-1)*(rest+gap),y:y+main+gap,width:i===count-1?w-(i-1)*(rest+gap):rest,height:h-main-gap});}return cells;}const each=Math.floor((w-gap*(count-1))/count);for(let i=0;i<count;i++)cells.push({x:x+i*(each+gap),y,width:i===count-1?w-i*(each+gap):each,height:h});return cells;}
 function layout(e:WindowEntry){
   if(e.win.isDestroyed())return;
   const [width,height]=e.win.getContentSize();
   const maximum=e.dock==='left'||e.dock==='right'?width-320:height-220;
   const minimum=e.dock==='left'||e.dock==='right'?240:96,sidebar=Math.max(34,Math.min(e.collapsed&&!e.expanded?34:Math.max(minimum,e.size),maximum));
-  const gap=8,top=30,bottom=8,outer=8;
+  const gap=8,top=8,bottom=8,outer=8;
   let bounds={x:outer,y:top,width:Math.max(200,width-outer*2),height:Math.max(100,height-top-bottom)};
   if(e.pageFullscreen)bounds={x:0,y:0,width,height};
   else if(e.dock==='left')bounds={x:sidebar+gap,y:top,width:Math.max(200,width-sidebar-gap-outer),height:Math.max(100,height-top-bottom)};
@@ -50,14 +55,12 @@ function layout(e:WindowEntry){
   else if(e.dock==='top')bounds={x:outer,y:sidebar+gap,width:Math.max(200,width-outer*2),height:Math.max(100,height-sidebar-gap-bottom)};
   else bounds={x:outer,y:top,width:Math.max(200,width-outer*2),height:Math.max(100,height-top-sidebar-gap)};
   if(!e.pageFullscreen)bounds={x:bounds.x+2,y:bounds.y+2,width:Math.max(196,bounds.width-4),height:Math.max(96,bounds.height-4)};
-  for(const t of e.tabs.values()){
-    t.view.setVisible(t.active&&!e.overlay);
-    if(t.active){t.view.setBorderRadius(e.pageFullscreen?0:19);t.view.setBounds(bounds);}
-  }
+  const group=e.activeComposite?e.composites.get(e.activeComposite):undefined,cells=group?splitBounds(bounds,group.tabIds.length,group.layout):[];
+  for(const t of e.tabs.values()){const pane=group?.tabIds.indexOf(t.id)??-1,visible=!e.overlay&&(pane>=0||(!group&&t.active));t.view.setVisible(visible);if(visible){t.view.setBorderRadius(e.pageFullscreen?0:19);t.view.setBounds(pane>=0?cells[pane]:bounds);}}
   const tab=e.active?e.tabs.get(e.active):undefined;
   e.win.webContents.send('browser:state',{title:tab?.title||'Custom Browser',url:tab?.url||'',loading:tab?.status==='loading',error:tab?.error,hasTab:!!tab,maximized:e.win.isMaximized(),fullscreen:e.win.isFullScreen(),pageFullscreen:e.pageFullscreen,startupNotice});
 }
-function selectTab(t:Tab){const e=getEntry(t.windowId);for(const tab of e.tabs.values())tab.active=tab.id===t.id;e.active=t.id;layout(e);onActivated.emit({tabId:t.id,windowId:t.windowId});}
+function selectTab(t:Tab){const e=getEntry(t.windowId);e.activeComposite=undefined;for(const tab of e.tabs.values())tab.active=tab.id===t.id;e.active=t.id;layout(e);notifyComposites(e);onActivated.emit({tabId:t.id,windowId:t.windowId});}
 function updateTab(t:Tab,change:any){Object.assign(t,change);onUpdated.emit(t.id,change,meta(t));layout(getEntry(t.windowId));}
 function shortcut(wc:WebContents,windowId:number){wc.on('before-input-event',(event,input)=>{
   if(input.type!=='keyDown')return;const key=input.key.toLowerCase();const command=input.control||input.meta;
@@ -101,7 +104,7 @@ function createTab(windowId:number,input:string,active=true){
   wc.on('did-fail-load',(_event,code,description,_url,isMain)=>{if(isMain&&code!==-3){recordDebug('page-load-failed',code);tab.error=`無法載入網頁（${code}）：${description}`;tab.status='complete';layout(e);}});
   wc.on('render-process-gone',()=>{tab.error='此分頁已停止回應，請按重新整理';layout(e);});
   wc.on('will-prevent-unload',event=>{const choice=dialog.showMessageBoxSync(e.win,{type:'question',buttons:['留在頁面','離開頁面'],defaultId:0,cancelId:0,message:'頁面可能有尚未儲存的內容。仍要離開？'});if(choice===1)event.preventDefault();else e.closing=false;});
-  wc.on('destroyed',()=>{e.tabs.delete(tab.id);try{e.win.contentView.removeChildView(view);}catch{}onRemoved.emit(tab.id,{windowId});
+  wc.on('destroyed',()=>{e.tabs.delete(tab.id);for(const [id,group]of e.composites){group.tabIds=group.tabIds.filter(value=>value!==tab.id);if(group.tabIds.length<2){e.composites.delete(id);if(e.activeComposite===id)e.activeComposite=undefined;}}try{e.win.contentView.removeChildView(view);}catch{}onRemoved.emit(tab.id,{windowId});notifyComposites(e);
     if(e.active===tab.id){e.active=undefined;const next=[...e.tabs.values()].at(-1);if(next)selectTab(next);}
     if(!e.win.isDestroyed()){layout(e);if(e.closing&&!e.tabs.size)e.win.destroy();}
   });
@@ -133,7 +136,7 @@ function loadWindowUI(e:WindowEntry){
 function createWindow(deferUI=false){
   const hiddenTest=process.env.CUSTOM_BROWSER_TEST_HIDDEN==='1';
   const win=new BrowserWindow({width:1320,height:880,minWidth:800,minHeight:560,frame:false,show:false,backgroundColor:'#222838',title:'Custom Browser',webPreferences:{preload:path.join(__dirname,'preload.cjs'),sandbox:true,contextIsolation:true,nodeIntegration:false,webSecurity:true,backgroundThrottling:!hiddenTest}});
-  const e:WindowEntry={win,size:260,dock:'left',collapsed:false,expanded:false,overlay:false,titlebarExpanded:false,pageFullscreen:false,closing:false,restoreStarted:false,uiLoadStarted:false,tabs:new Map()};windows.set(win.id,e);
+  const e:WindowEntry={win,size:260,dock:'left',collapsed:false,expanded:false,overlay:false,titlebarExpanded:false,pageFullscreen:false,closing:false,restoreStarted:false,uiLoadStarted:false,tabs:new Map(),composites:new Map()};windows.set(win.id,e);
   win.webContents.setWindowOpenHandler(()=>({action:'deny'}));
   win.webContents.on('will-navigate',(event,url)=>{if(url!==UI_URL&&url!==SPLASH_URL)event.preventDefault();});
   win.webContents.on('will-attach-webview',event=>event.preventDefault());
@@ -359,6 +362,7 @@ async function initialize(){
   ipcMain.handle('browser:controls-menu',(event,options)=>{const e=authorized(event);if(!['left','right'].includes(options?.side)||!Number.isFinite(options?.x)||!Number.isFinite(options?.y))throw new Error('無效的視窗控制選單');return new Promise<'left'|'right'|null>(resolve=>{let picked:'left'|'right'|null=null;const menu=Menu.buildFromTemplate([{label:'靠左',type:'radio',checked:options.side==='left',click:()=>{picked='left';}},{label:'靠右',type:'radio',checked:options.side==='right',click:()=>{picked='right';}}]);menu.popup({window:e.win,x:Math.round(options.x),y:Math.round(options.y),callback:()=>resolve(picked)});});});
   ipcMain.handle('browser:cursor-position',event=>{const win=authorized(event).win,point=screen.getCursorScreenPoint(),bounds=win.getContentBounds();return {x:point.x-bounds.x,y:point.y-bounds.y};});
   ipcMain.handle('browser:layout',(event,options)=>{const e=authorized(event);if(!Number.isFinite(options?.size)||!['left','right','top','bottom'].includes(options?.dock)||typeof options.collapsed!=='boolean'||typeof options.expanded!=='boolean'||typeof options.overlay!=='boolean'||typeof options.titlebarExpanded!=='boolean')throw new Error('無效布局');const horizontal=options.dock==='top'||options.dock==='bottom';e.size=Math.max(horizontal?96:240,Math.min(horizontal?220:480,options.size));e.dock=options.dock;e.collapsed=options.collapsed;e.expanded=options.expanded;e.overlay=options.overlay;e.titlebarExpanded=options.titlebarExpanded;layout(e);});
+  ipcMain.handle('browser:composite',async(event,options)=>{const e=authorized(event),action=options?.action;if(action==='list')return compositeMeta(e);if(action==='select'){const group=e.composites.get(String(options.id));if(!group)throw new Error('複合分頁不存在');e.activeComposite=group.id;e.active=group.tabIds[0];for(const tab of e.tabs.values())tab.active=tab.id===e.active;layout(e);notifyComposites(e);return compositeMeta(e);}if(action==='ungroup'){const id=String(options.id),group=e.composites.get(id);if(!group)throw new Error('複合分頁不存在');e.composites.delete(id);e.activeComposite=undefined;const tab=e.tabs.get(group.tabIds[0]);if(tab)selectTab(tab);notifyComposites(e);return compositeMeta(e);}if(action==='close'){const id=String(options.id),group=e.composites.get(id);if(!group)throw new Error('複合分頁不存在');e.composites.delete(id);e.activeComposite=undefined;await Promise.allSettled(group.tabIds.map(id=>closeTab(id)));notifyComposites(e);return compositeMeta(e);}if(action==='create'){const panes=Array.isArray(options.panes)?options.panes:[];if(!['columns','rows','main-left','main-top','grid'].includes(options.layout)||panes.length<2||panes.length>6)throw new Error('分割布局格式不支援');const ids:number[]=[];for(const pane of panes){const requested=Number(pane?.id),existing=e.tabs.get(requested);if(existing&&!ids.includes(existing.id)){ids.push(existing.id);continue;}const created=createTab(e.win.id,String(pane?.url||'about:blank'),false);ids.push(created.id);}const group:CompositeTab={id:crypto.randomUUID(),title:'複合分頁',layout:options.layout,tabIds:ids};e.composites.set(group.id,group);e.activeComposite=group.id;e.active=ids[0];for(const tab of e.tabs.values())tab.active=tab.id===e.active;layout(e);notifyComposites(e);return group;}throw new Error('不支援的複合分頁操作');});
   ipcMain.handle('browser:layout-sync',(event,sidebar)=>invoke(authorized(event).win.id,{type:'settings',layout:sidebar}));
   ipcMain.handle('browser:profile-import',async(event,browser)=>{const e=authorized(event);if(!['Chrome','Arc'].includes(browser))throw new Error('不支援的瀏覽器');return importBrowserProfile(e.win,browser);});
   ipcMain.handle('browser:oauth-config',async event=>{const e=authorized(event);const selected=await dialog.showOpenDialog(e.win,{title:'選取 Google Desktop OAuth JSON',filters:[{name:'JSON',extensions:['json']}],properties:['openFile']});if(selected.canceled)return false;const data=await readFile(selected.filePaths[0],'utf8');if(data.length>64000)throw new Error('設定檔過大');await configureOAuth(JSON.parse(data));notify();return true;});

@@ -26,6 +26,7 @@ const collapsed = new Set<string>();
 const selected = new Set<string>();
 let selectionAnchor = '';
 let inlineEditor:HTMLElement|undefined;
+let desktopComposites:any[]=[];
 const linkedRadius=(value:number)=>({linked:true,all:value,topLeft:value,topRight:value,bottomRight:value,bottomLeft:value});
 async function rpc(type: string, args: Record<string, unknown> = {}): Promise<any> {
   const result = await browserAPI.runtime.sendMessage({ type, windowId, ...args });
@@ -66,17 +67,18 @@ async function refresh() {
 }
 function scheduleRefresh() { clearTimeout(refreshTimer); refreshTimer = setTimeout(() => run(refresh), 80); }
 function isOpen(key: string) { return Object.entries(state.bindings).some(([, b]) => b.key === key && b.windowId === windowId); }
-const pointerDropTargets = new WeakMap<HTMLElement, (key: string) => void>();
+type DropSide='before'|'after'|'inside';
+const pointerDropTargets = new WeakMap<HTMLElement, (key: string,side:DropSide) => void>();
 let pointerDrag: { key: string; x: number; y: number; started: boolean } | undefined;
 let highlightedDrop: HTMLElement | undefined;
 document.addEventListener('pointermove', e => {
   if (!pointerDrag) return;
   if (Math.hypot(e.clientX - pointerDrag.x, e.clientY - pointerDrag.y) > 6) pointerDrag.started = true;
   if (!pointerDrag.started) return;
-  highlightedDrop?.classList.remove('drop-target'); highlightedDrop = undefined;
+  highlightedDrop?.classList.remove('drop-target','drop-before','drop-after');if(highlightedDrop)delete highlightedDrop.dataset.dropSide; highlightedDrop = undefined;
   let target = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
   while (target && !pointerDropTargets.has(target)) target = target.parentElement;
-  if (target) { highlightedDrop = target; target.classList.add('drop-target'); }
+  if (target) { highlightedDrop = target; const rect=target.getBoundingClientRect(),horizontal=document.body.classList.contains('dock-top')||document.body.classList.contains('dock-bottom'),side:DropSide=horizontal?(e.clientX<rect.left+rect.width/2?'before':'after'):(e.clientY<rect.top+rect.height/2?'before':'after');target.classList.add(side==='before'?'drop-before':'drop-after');target.dataset.dropSide=side; }
 });
 document.addEventListener('pointerup', () => {
   const drag = pointerDrag; pointerDrag = undefined;
@@ -84,27 +86,28 @@ document.addEventListener('pointerup', () => {
     const cancelClick = (e: MouseEvent) => { e.preventDefault(); e.stopImmediatePropagation(); };
     document.addEventListener('click', cancelClick, { capture: true, once: true });
     setTimeout(() => document.removeEventListener('click', cancelClick, true), 0);
-    if (highlightedDrop) pointerDropTargets.get(highlightedDrop)?.(drag.key);
+    if (highlightedDrop) pointerDropTargets.get(highlightedDrop)?.(drag.key,(highlightedDrop.dataset.dropSide as DropSide)||'inside');
   }
-  highlightedDrop?.classList.remove('drop-target'); highlightedDrop = undefined;
+  highlightedDrop?.classList.remove('drop-target','drop-before','drop-after');if(highlightedDrop)delete highlightedDrop.dataset.dropSide; highlightedDrop = undefined;
 });
 document.addEventListener('pointercancel', () => { pointerDrag = undefined; highlightedDrop?.classList.remove('drop-target'); });
 function drag(node: HTMLElement, key: string) {
   node.draggable = true;
   node.classList.add('draggable');
-  node.ondragstart = e => { document.body.classList.add('item-dragging');e.dataTransfer!.setData('text/custom-browser', key); e.dataTransfer!.effectAllowed = 'move'; };
-  node.ondragend=()=>document.body.classList.remove('item-dragging');
+  node.ondragstart = e => { const keys=selected.has(key)?[...selected]:[key];document.body.classList.add('item-dragging');e.dataTransfer!.setData('text/custom-browser', key);e.dataTransfer!.setData('application/x-custom-browser-items',JSON.stringify(keys)); e.dataTransfer!.effectAllowed = 'move';window.dispatchEvent(new CustomEvent('browser-item-drag-start',{detail:{keys}})); };
+  node.ondragend=()=>{document.body.classList.remove('item-dragging');window.dispatchEvent(new Event('browser-item-drag-end'));};
   if (document.body.classList.contains('desktop')) {
     node.onpointerdown = e => { if (e.button === 0 && !(e.target as HTMLElement).closest('.more,.close-tab')) pointerDrag = { key, x: e.clientX, y: e.clientY, started: false }; };
   }
 }
-function drop(node: HTMLElement, handler: (key: string) => void) {
+function drop(node: HTMLElement, handler: (key: string,side:DropSide) => void,inside=false) {
   pointerDropTargets.set(node, handler);
-  node.ondragover = e => { if (e.dataTransfer?.types.includes('text/custom-browser')) { e.preventDefault(); e.stopPropagation(); node.classList.add('drop-target'); } };
-  node.ondragleave = () => node.classList.remove('drop-target');
-  node.ondrop = e => { e.preventDefault(); e.stopPropagation(); node.classList.remove('drop-target'); const key = e.dataTransfer?.getData('text/custom-browser'); if (key) handler(key); };
+  node.ondragover = e => { if (e.dataTransfer?.types.includes('text/custom-browser')) { e.preventDefault(); e.stopPropagation();const rect=node.getBoundingClientRect(),horizontal=document.body.classList.contains('dock-top')||document.body.classList.contains('dock-bottom'),side:DropSide=inside?'inside':horizontal?(e.clientX<rect.left+rect.width/2?'before':'after'):(e.clientY<rect.top+rect.height/2?'before':'after');node.classList.remove('drop-target','drop-before','drop-after');node.classList.add(side==='inside'?'drop-target':side==='before'?'drop-before':'drop-after');node.dataset.dropSide=side;} };
+  node.ondragleave = () => {node.classList.remove('drop-target','drop-before','drop-after');delete node.dataset.dropSide;};
+  node.ondrop = e => { e.preventDefault(); e.stopPropagation(); const side=(node.dataset.dropSide as DropSide)||'inside';node.classList.remove('drop-target','drop-before','drop-after');delete node.dataset.dropSide; const key = e.dataTransfer?.getData('text/custom-browser'); if (key) handler(key,side); };
 }
 function move(key: string, space: string, folder?: string, order = Date.now()) { run(() => act('move', { key, space, folder, order })); }
+function insertionOrder(peers:RecordView[],source:string,target:string,side:DropSide){const ordered=peers.filter(p=>p.key!==source),targetAt=ordered.findIndex(p=>p.key===target),at=Math.max(0,targetAt+(side==='after'?1:0)),before=ordered[at-1]?.value,after=ordered[at]?.value;const a=before&&'order'in before?before.order:after&&'order'in after?after.order-2:Date.now(),b=after&&'order'in after?after.order:a+2;return(a+b)/2;}
 function inlineInput(host:HTMLElement,placeholder:string,initial:string,commit:(value:string)=>void){
   inlineEditor?.remove();const editor=el('input','inline-editor') as HTMLInputElement;inlineEditor=editor;editor.placeholder=placeholder;editor.value=initial;host.append(editor);editor.focus();editor.select();let done=false;
   const finish=(save:boolean)=>{if(done)return;done=true;const value=editor.value.trim();editor.remove();if(inlineEditor===editor)inlineEditor=undefined;if(save&&value)commit(value);};
@@ -115,8 +118,9 @@ function inlineTextInput(label:HTMLElement,placeholder:string,initial:string,com
   const finish=(save:boolean)=>{if(done)return;done=true;const value=editor.value.trim();editor.remove();label.hidden=false;if(inlineEditor===editor)inlineEditor=undefined;if(save&&value)commit(value);};
   editor.onkeydown=e=>{if(e.key==='Enter'){e.preventDefault();finish(true);}else if(e.key==='Escape'){e.preventDefault();finish(false);}};editor.onblur=()=>finish(false);editor.onclick=e=>e.stopPropagation();editor.onpointerdown=e=>e.stopPropagation();return editor;
 }
-function startNewFolder(){const host=$('items');const wrap=el('div','inline-create');host.prepend(wrap);inlineInput(wrap,'新增資料夾','',name=>run(async()=>{await act('create-folder',{name,items:[...selected]});selected.clear();}));}
-function startNewTab(){const host=$('items');const wrap=el('div','inline-create new-tab-inline');host.append(wrap);inlineInput(wrap,'輸入網址或搜尋','',value=>run(()=>act('navigate',{input:value,newTab:true})));}
+function raisedDesktopZones(){return document.body.classList.contains('desktop')&&(document.body.classList.contains('dock-left')||document.body.classList.contains('dock-right'));}
+function startNewFolder(){const host=raisedDesktopZones()?document.querySelector<HTMLElement>('.folders-zone')||$('items'):$('items');const wrap=el('div','inline-create');host.prepend(wrap);inlineInput(wrap,'新增資料夾','',name=>run(async()=>{await act('create-folder',{name,items:[...selected]});selected.clear();}));}
+function startNewTab(){const host=raisedDesktopZones()?document.querySelector<HTMLElement>('.tabs-zone')||$('items'):$('items');const wrap=el('div','inline-create new-tab-inline');host.append(wrap);inlineInput(wrap,'輸入網址或搜尋','',value=>run(()=>act('navigate',{input:value,newTab:true})));}
 function startNewSpace(){const host=$('spaces');const wrap=el('div','inline-create inline-space');host.append(wrap);inlineInput(wrap,'新增 Space','',name=>run(()=>act('create-space',{name})));}
 function renameRecord(r:RecordView){const value=r.value;if(!value||value.kind==='settings')return;const host=document.querySelector<HTMLElement>(`[data-key="${CSS.escape(r.key)}"]`);const label=host?.querySelector<HTMLElement>(value.kind==='item'?'.item-title':value.kind==='folder'?'.folder-name':'.space-name');if(!label)return;inlineTextInput(label,'重新命名','name'in value?value.name:value.title,name=>run(()=>act('update',{key:r.key,baseHeads:r.heads.map(h=>h.id),value:{...value,...('name'in value?{name}:{title:name,manualTitle:true})}})));}
 function selectRecord(e:MouseEvent,key:string){
@@ -140,15 +144,15 @@ function row(r: RecordView) {
   node.oncontextmenu=e=>{e.preventDefault();e.stopPropagation();itemMenu(r);};
   node.onauxclick=e=>{if(e.button===1){e.preventDefault();e.stopPropagation();run(()=>act('close',{key:r.key}));}};
   drag(node, r.key);
-  drop(node, key => {
+  drop(node, (key,side) => {
     const source = record(key)?.value;
     if (source?.kind !== 'item' || key === r.key) return;
     const peers = entities('item').filter(p => (p.value as Item).space === item.space && (p.value as Item).folder === item.folder && (p.value as Item).pinned === item.pinned);
-    const at = peers.findIndex(p => p.key === r.key); const previous = at > 0 ? (peers[at - 1].value as Item).order : item.order - 2;
-    move(key, item.space, item.folder, (previous + item.order) / 2);
+    move(key, item.space, item.folder, insertionOrder(peers,key,r.key,side));
   });
   return node;
 }
+function compositeRow(group:any){const node=el('div','item composite-item');node.dataset.composite=group.id;node.classList.toggle('active',!!group.active);const main=button('',`複合分頁：${group.panes?.map((pane:any)=>pane.title).join('、')||''}`,()=>void 0,'open-item');main.append(el('span','favicon composite-icon','▦'));const text=el('span','item-text');text.append(el('span','item-title','複合分頁'),el('small','composite-count',`${group.tabIds?.length||0} 個分頁`));main.append(text);main.onclick=()=>run(async()=>{await (window as any).desktop.composite('select',{id:group.id});});node.append(main,button('×','關閉複合分頁',()=>showMenu('關閉複合分頁',[['全部關閉',()=>run(async()=>{await (window as any).desktop.composite('close',{id:group.id});})],['取消組合',()=>run(async()=>{await (window as any).desktop.composite('ungroup',{id:group.id});})]],node),'close-tab'));node.oncontextmenu=e=>{e.preventDefault();showMenu('複合分頁',[['取消組合',()=>run(async()=>{await (window as any).desktop.composite('ungroup',{id:group.id});})],['全部關閉',()=>run(async()=>{await (window as any).desktop.composite('close',{id:group.id});})]],node);};return node;}
 function render() {
   // 背景工作完成時可能送出資料更新；行內輸入期間保留目前 DOM，直到 Enter、Esc 或失焦結束編輯。
   if(inlineEditor?.isConnected)return;
@@ -159,8 +163,12 @@ function render() {
   const settings = entities('settings')[0]?.value;
   $('address-section').hidden = settings?.kind === 'settings' && !settings.addressBar;
   if (document.activeElement !== input('address')) input('address').value = state.activeTab?.url || '';
-  const allItems = entities('item').filter(r => (r.value as Item).space === state.activeSpace);
-  const list = $('items'); list.replaceChildren();
+  const groupedIds=new Set(desktopComposites.flatMap(group=>group.tabIds||[])),groupedKeys=new Set(Object.entries(state.bindings).filter(([id])=>groupedIds.has(Number(id))).map(([,binding])=>binding.key));
+  const allItems = entities('item').filter(r => (r.value as Item).space === state.activeSpace&&!groupedKeys.has(r.key));
+  const list = $('items');
+  // 桌面側邊模式會暫時把三個清單區塊提升為 shell 的直接子項，重繪前先收回，避免殘留舊節點。
+  document.querySelectorAll<HTMLElement>('#shell>:is(.pinned-zone,.folders-zone,.tabs-zone)').forEach(node=>list.append(node));
+  list.replaceChildren();
   const visible = allItems;
   list.classList.remove('few-tabs','medium-tabs','many-tabs');
   list.classList.add(visible.length <= 8 ? 'few-tabs' : visible.length <= 16 ? 'medium-tabs' : 'many-tabs');
@@ -177,10 +185,12 @@ function render() {
       const name=el('span','folder-name',folder.name);name.onclick=e=>e.stopPropagation();name.ondblclick=e=>{e.preventDefault();e.stopPropagation();renameRecord(f);};summary.append(toggle,icon,name,button('⋯',`資料夾操作：${folder.name}`,()=>folderMenu(f),'more'));
       summary.onclick=e=>{if((e.target as HTMLElement).closest('button'))return;selectRecord(e,f.key);render();};details.ontoggle=()=>{toggle.textContent=details.open?'▾':'▸';if(details.open)collapsed.delete(f.key);else collapsed.add(f.key);};
       const body=el('div','folder-content');for(const child of folders.filter(r=>(r.value as Folder).parent===f.key))body.append(renderFolder(child));visible.filter(r=>!(r.value as Item).pinned&&(r.value as Item).folder===f.key).forEach(r=>body.append(row(r)));details.append(summary,body);drag(summary,f.key);
-      drop(details,key=>{const source=record(key)?.value;if(source?.kind==='item'||source?.kind==='folder')move(key,state.activeSpace,f.key);});return details;};
+      drop(summary,(key,side)=>{const source=record(key)?.value;if(source?.kind!=='folder'||key===f.key)return;const peers=folders.filter(x=>(x.value as Folder).parent===folder.parent);move(key,state.activeSpace,folder.parent,insertionOrder(peers,key,f.key,side));});
+      drop(body,key=>{const source=record(key)?.value;if(source?.kind==='item'||source?.kind==='folder')move(key,state.activeSpace,f.key);},true);return details;};
     for(const f of folders.filter(r=>!(r.value as Folder).parent||!folders.some(x=>x.key===(r.value as Folder).parent)))foldersZone.append(renderFolder(f));list.append(foldersZone);
     const loose = visible.filter(r => !(r.value as Item).pinned && (!(r.value as Item).folder || !folders.some(f => f.key === (r.value as Item).folder)));
     const tabsZone=el('section','tabs-zone');tabsZone.dataset.layoutBlock='tabs';const heading = el('div', 'section-title'); tabsZone.append(heading); drop(heading, key => { if (record(key)?.value?.kind === 'item') move(key, state.activeSpace); });
+    for(const group of desktopComposites){const keys=(group.tabIds||[]).map((id:number)=>state.bindings[String(id)]?.key).filter(Boolean);if(keys.some((key:string)=>record(key)?.value&&'space'in record(key)!.value!&&(record(key)!.value as Item).space===state.activeSpace))tabsZone.append(compositeRow(group));}
     loose.forEach(r => tabsZone.append(row(r)));list.append(tabsZone);
   }
   if (!visible.length && !entities('folder').some(r => (r.value as Folder).space === state.activeSpace)) list.append(el('div', 'empty'));
@@ -191,11 +201,10 @@ function render() {
     const spaceName=el('span','space-name',s.name);spaceName.onclick=e=>e.stopPropagation();spaceName.ondblclick=e=>{e.preventDefault();e.stopPropagation();renameRecord(r);};b.append(spaceName);b.dataset.key=r.key;drag(b, r.key);
     const icon=b.querySelector<HTMLElement>('.space-icon,.space-icon-fallback');if(icon){icon.onclick=e=>e.stopPropagation();icon.ondblclick=e=>{e.preventDefault();e.stopPropagation();openAppearance(r.key);setTimeout(()=>input('icon-file').click());};}
     b.oncontextmenu = e => { e.preventDefault(); spaceMenu(r,b); };
-    drop(b, key => {
+    drop(b, (key,side) => {
       if (key === r.key) return;
       if (record(key)?.value?.kind === 'space') {
-        const arr = entities('space'); const at = arr.findIndex(x => x.key === r.key); const prev = at > 0 ? (arr[at - 1].value as Space).order : s.order - 2;
-        move(key, r.key, undefined, (prev + s.order) / 2);
+        const arr = entities('space');move(key, r.key, undefined, insertionOrder(arr,key,r.key,side));
       } else move(key, r.key);
     }); spaces.append(b);
   }
@@ -205,7 +214,9 @@ function render() {
   $('sync-status').textContent = status; $('sync-status').title = state.sync.error || status;
   $<HTMLButtonElement>('sync-now').disabled = !state.account || state.sync.running;
   updateSync();
+  window.dispatchEvent(new Event('panel-rendered'));
 }
+window.addEventListener('desktop-composites',(event:any)=>{desktopComposites=Array.isArray(event.detail)?event.detail:[];if(state)render();});
 function showMenu(title: string, actions: Array<[string, () => void]>,anchor?:HTMLElement) {
   $('menu-title').textContent = title; $('menu-actions').replaceChildren();
   for (const [label, action] of actions) $('menu-actions').append(button(label, label, () => { dialog('menu-dialog').close(); action(); }));
